@@ -1,4 +1,4 @@
-# 🦞 OpenClaw Hardened Swarm Deployment Guide (2026.2)
+# 🦞 OpenClaw Swarm Deployment Guide (2026.2)
 
 **Production-grade, least-privilege OpenClaw deployment on CapRover Docker Swarm.**  
 
