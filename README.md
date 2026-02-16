@@ -1,12 +1,13 @@
-# 🦞 OpenClaw Hardened Swarm Deployment (2026.2)
+# 🦞 OpenClaw Hardened Swarm on CapRover (2026.2)
 
 **Production-grade, least-privilege OpenClaw deployment on CapRover Docker Swarm.**  
+
 All sensitive services pinned to a single trusted node (`nyc`). Full defense-in-depth: node constraints, minimal socket proxy, loopback gateway, and maximum sandbox isolation.
 
-**Target**: 4-node Ubuntu 24.04 Swarm (3 managers + 1 worker) with leader on `nyc`  
-**OpenClaw Version**: `openclaw/openclaw:2026.2.15` (pinned)  
-**Threat Model**: Prompt injection → arbitrary tool execution → host/container escape  
-**Audit Date**: 2026-02-16 | **Score**: 9.7/10 (production-ready)
+- **Target**: 4-node Ubuntu 24.04 Swarm (3 managers + 1 worker) with leader on `nyc`  
+- **OpenClaw Version**: `openclaw/openclaw:2026.2.15` (pinned)  
+- **Threat Model**: Prompt injection → arbitrary tool execution → host/container escape  
+- **Audit Date**: 2026-02-16 | **Score**: 9.7/10 (production-ready)
 
 ## Overview
 
@@ -80,6 +81,7 @@ Migrate data (`rsync` from old volume), update captain app volume binding, then 
 **Note**: For production stateful storage, migrate to Longhorn later.
 
 ### Step 5: Configure Firewall (Run on All Nodes)
+
 ```bash
 ADMIN_IP="YOUR_STATIC_IP"
 
@@ -89,11 +91,36 @@ ufw default allow outgoing
 
 ufw allow from $ADMIN_IP to any port 9922 proto tcp
 ufw limit 9922/tcp
+```
 
-# Cloudflare ranges
-for ip in $(curl -s https://www.cloudflare.com/ips-v4); do ufw allow from $ip to any port 80,443 proto tcp; done
-for ip in $(curl -s https://www.cloudflare.com/ips-v6); do ufw allow from $ip to any port 80,443 proto tcp; done
+#### Cloudflare Ingress Setup (Recommended)
 
+Since CapRover is exposed publicly via HTTP/HTTPS, we restrict inbound traffic on ports 80 and 443 to **Cloudflare’s IP ranges only**. This prevents direct access to your origin servers and significantly reduces attack surface.
+
+**Why this matters**:  
+- Blocks direct bypass of Cloudflare (WAF, DDoS protection, bot management)  
+- Enforces that all traffic goes through Cloudflare first
+
+**Setup Script**:
+```bash
+# Cloudflare ranges (IPv4 + IPv6) - run this after ufw reset
+for ip in $(curl -s https://www.cloudflare.com/ips-v4); do 
+  ufw allow from $ip to any port 80,443 proto tcp
+done
+
+for ip in $(curl -s https://www.cloudflare.com/ips-v6); do 
+  ufw allow from $ip to any port 80,443 proto tcp
+done
+```
+
+**Best Practices**:
+- Run the Cloudflare IP update script weekly (add to cron or maintenance script)
+- In Cloudflare dashboard: Enable **"Only allow Cloudflare IPs"** under **SSL/TLS → Origin Server** or use **Cloudflare Tunnel** (Zero Trust) for even stronger isolation (recommended for production)
+- Consider using Cloudflare Spectrum or Access policies for additional protection
+
+Continue with Swarm rules:
+
+```bash
 # Swarm inter-node
 for ip in <ALL_NODE_IPS>; do
   ufw allow from $ip to any port 2377,7946 proto tcp
@@ -238,9 +265,83 @@ curl -I https://openclaw.yourdomain.com
 ```
 
 ### Step 11: Maintenance
-- Weekly: `openclaw security audit --deep --fix && docker service update --force --image openclaw/openclaw:2026.2.15 srv-captain--openclaw`
-- Monitor sandbox container lifecycle and proxy logs
-- Rotate gateway password periodically
+
+Run these scripts from the leader node (`nyc`). Place them in `/opt/openclaw-monitoring/`.
+
+#### 1. Main Maintenance Script (Recommended Weekly)
+```bash
+cat > /opt/openclaw-monitoring/openclaw-maintenance.sh << 'EOF'
+#!/bin/bash
+LOG="/opt/openclaw-monitoring/logs/maintenance-$(date +%F-%H%M).log"
+
+echo "=== OpenClaw Maintenance Run - $(date) ===" | tee -a $LOG
+
+# Backup volume (optional but recommended)
+echo "→ Backing up ~/.openclaw volume" | tee -a $LOG
+tar -czf /opt/openclaw-monitoring/backups/openclaw-data-$(date +%F).tar.gz -C /var/lib/docker/volumes/openclaw-data/_data . 2>> $LOG
+
+# Security audit + fix
+echo "→ Running security audit" | tee -a $LOG
+docker exec $(docker ps -q -f name=srv-captain--openclaw) openclaw security audit --deep --fix >> $LOG 2>&1
+
+# Update to pinned image
+echo "→ Updating OpenClaw service" | tee -a $LOG
+docker service update --force --image openclaw/openclaw:2026.2.15 srv-captain--openclaw >> $LOG 2>&1
+
+# Doctor check
+echo "→ Running doctor" | tee -a $LOG
+docker exec $(docker ps -q -f name=srv-captain--openclaw) openclaw doctor >> $LOG 2>&1
+
+echo "=== Maintenance Complete ===" | tee -a $LOG
+EOF
+```
+
+#### 2. Gateway Password Rotation Script
+```bash
+cat > /opt/openclaw-monitoring/rotate-gateway-password.sh << 'EOF'
+#!/bin/bash
+NEW_PASS=$(openssl rand -hex 32)
+
+docker exec $(docker ps -q -f name=srv-captain--openclaw) sh -c "
+  openclaw config set gateway.password '$NEW_PASS'
+  echo 'New gateway password set: $NEW_PASS'
+"
+
+echo "Gateway password rotated. Update your clients/DMs with the new password."
+echo "New password: $NEW_PASS"
+EOF
+```
+
+#### 3. Log & Sandbox Cleanup Script
+```bash
+cat > /opt/openclaw-monitoring/cleanup.sh << 'EOF'
+#!/bin/bash
+echo "→ Pruning old sandbox containers"
+docker container prune -f --filter "label=openclaw.sandbox=true"
+
+echo "→ Cleaning old logs"
+find /opt/openclaw-monitoring/logs -name "*.log" -mtime +30 -delete
+EOF
+```
+
+#### Make all scripts executable
+```bash
+chmod +x /opt/openclaw-monitoring/*.sh
+```
+
+#### Cron Recommendations (Add to crontab -e on nyc)
+```cron
+# Weekly full maintenance (Sunday 4 AM)
+0 4 * * 0 /opt/openclaw-monitoring/openclaw-maintenance.sh
+
+# Monthly password rotation (1st of month at 3 AM)
+0 3 1 * * /opt/openclaw-monitoring/rotate-gateway-password.sh
+
+# Daily cleanup
+0 2 * * * /opt/openclaw-monitoring/cleanup.sh
+```
+
+**Best Practice**: Review logs in `/opt/openclaw-monitoring/logs/` after each run. Keep backups of the `openclaw-data` volume before major updates.
 
 ### Step 12: Troubleshooting
 - Sandbox fails → Check `docker-proxy` logs and sandbox container exits
@@ -347,7 +448,5 @@ Add these lines:
 1. Run the node label command for `nyc`
 2. Deploy the three YAMLs in order
 3. Apply the full post-deployment hardening block
-4. Set up the monitoring scripts in Step 13
+4. Set up the monitoring and maintenance scripts
 5. Test agent execution in a secondary/group channel first
-
-All previous information has been kept **verbatim**. The new Step 13 adds ready-to-use, production-grade monitoring scripts and cron configuration. Let me know if you want systemd timers or email/ntfy alerting added.
