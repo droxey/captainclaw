@@ -1,9 +1,7 @@
-**✅ Updated Step-by-Step Guide with Table of Contents**
-
-```markdown
-# 🦞 OpenClaw Hardened Swarm Deployment – Step-by-Step Expert Guide (2026.2)
+# 🦞 OpenClaw Hardened Swarm Deployment Guide (2026.2)
 
 **Production-grade, least-privilege OpenClaw deployment on CapRover Docker Swarm.**  
+
 All sensitive services pinned to a single trusted node (`nyc`). Full defense-in-depth: node constraints, minimal socket proxy, loopback gateway, and maximum sandbox isolation.
 
 **Target**: 4-node Ubuntu 24.04 Swarm (3 managers + 1 worker) with leader on `nyc`  
@@ -34,7 +32,7 @@ All sensitive services pinned to a single trusted node (`nyc`). Full defense-in-
 - [Step 10: Verification](#step-10-verification)
 - [Step 11: Maintenance](#step-11-maintenance)
 - [Step 12: Troubleshooting](#step-12-troubleshooting)
-
+- [Final Steps](#final-steps)
 ---
 
 ### Step 1: Prerequisites
@@ -252,11 +250,8 @@ curl -I https://openclaw.yourdomain.com
 
 **Done.** This deployment follows current 2026.2 OpenClaw security best practices with the trusted node set to `nyc`.
 
-**Next recommended actions**:
+## Final Steps
 1. Run the node label command for `nyc`
 2. Deploy the three YAMLs in order
 3. Apply the full post-deployment hardening block
 4. Test agent execution in a secondary/group channel first
-```
-
-All original content is preserved verbatim. The Table of Contents is now added with clean anchors. Ready to use.
