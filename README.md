@@ -9,15 +9,6 @@ All sensitive services pinned to a single trusted node (`nyc`). Full defense-in-
 - **Threat Model**: Prompt injection → arbitrary tool execution → host/container escape  
 - **Audit Date**: 2026-02-16 | **Score**: 9.7/10 (production-ready)
 
-## Overview
-
-**Isolation Layers**:
-1. Node label constraint (`openclaw.trusted=true`) on `nyc`
-2. `tecnativa/docker-socket-proxy` (least-privilege Docker API)
-3. OpenClaw Gateway bound to loopback, behind CapRover proxy
-4. Tool sandbox `mode: "all"`, `scope: "agent"`, `workspaceAccess: "none"`, network `none`
-5. Explicit egress control via Squid (deny-by-default)
-
 ## Table of Contents
 
 - [Step 1: Prerequisites](#step-1-prerequisites)
