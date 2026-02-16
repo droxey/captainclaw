@@ -1,12 +1,12 @@
-# 🦞 OpenClaw Hardened Swarm on CapRover (2026.2)
+# 🦞 OpenClaw Hardened Swarm Guide (2026.2)
 
 **Production-grade, least-privilege OpenClaw deployment on CapRover Docker Swarm.**  
+All sensitive services pinned to a single trusted node (`nyc`).
 
-All sensitive services pinned to a single trusted node (`nyc`). Full defense-in-depth: node constraints, minimal socket proxy, loopback gateway, and maximum sandbox isolation.
-
-- **Target**: 4-node Ubuntu 24.04 Swarm (3 managers + 1 worker) with leader on `nyc`  
-- **OpenClaw Version**: `openclaw/openclaw:2026.2.15` (pinned)  
-- **Threat Model**: Prompt injection → arbitrary tool execution → host/container escape  
+## Key Information
+- **Target**: 4-node Ubuntu 24.04 Swarm (3 managers + 1 worker) with leader on `nyc`
+- **OpenClaw Version**: `openclaw/openclaw:2026.2.15` (pinned)
+- **Threat Model**: Prompt injection → arbitrary tool execution → host/container escape
 - **Audit Date**: 2026-02-16 | **Score**: 9.7/10 (production-ready)
 
 ## Table of Contents
@@ -28,10 +28,45 @@ All sensitive services pinned to a single trusted node (`nyc`). Full defense-in-
 ---
 
 ### Step 1: Prerequisites
+
+#### 1.1 UFW + ufw-docker Setup (Run on **ALL** Nodes)
+
+```bash
+# 1. Install UFW
+sudo apt update
+sudo apt install ufw -y
+
+# 2. Install ufw-docker (official integration script)
+sudo wget -O /usr/local/bin/ufw-docker \
+  https://github.com/chaifeng/ufw-docker/raw/master/ufw-docker
+sudo chmod +x /usr/local/bin/ufw-docker
+
+# 3. Install ufw-docker integration
+sudo ufw-docker install --confirm-license
+
+# 4. Initial configuration
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+sudo ufw allow from 127.0.0.1 to any port 22 proto tcp   # temporary local SSH
+sudo ufw --force enable
+```
+
+#### 1.2 Static Admin IP + Cloudflare Setup
+
+**Static Admin IP (SSH Access)**
+- Use a **static public IP** dedicated for administrative access (recommended: VPS floating IP, static ISP IP, or a small bastion host).
+- Record this IP as `$ADMIN_IP` — you will use it in Step 5.
+
+**Cloudflare Setup (Recommended)**
+1. Add your domain to Cloudflare and update nameservers.
+2. In DNS tab: Create an **A** or **CNAME** record pointing to your Swarm leader’s public IP (`nyc`) with **Proxied** status (orange cloud).
+3. SSL/TLS → Set to **Full (strict)**.
+4. Enable **WAF** (managed rulesets) + **Bot Fight Mode**.
+5. (Strongly Recommended) Consider using **Cloudflare Tunnel** for zero open inbound ports.
+
+**Other prerequisites**:
 - Healthy 4-node Swarm with 3 managers (leader: `nyc`)
 - CapRover installed and running
-- UFW + `ufw-docker` on all nodes
-- Static admin IP + Cloudflare (or equivalent) in front
 
 ### Step 2: Label the Trusted Node
 ```bash
@@ -86,15 +121,8 @@ ufw limit 9922/tcp
 
 #### Cloudflare Ingress Setup (Recommended)
 
-Since CapRover is exposed publicly via HTTP/HTTPS, we restrict inbound traffic on ports 80 and 443 to **Cloudflare’s IP ranges only**. This prevents direct access to your origin servers and significantly reduces attack surface.
-
-**Why this matters**:  
-- Blocks direct bypass of Cloudflare (WAF, DDoS protection, bot management)  
-- Enforces that all traffic goes through Cloudflare first
-
-**Setup Script**:
 ```bash
-# Cloudflare ranges (IPv4 + IPv6) - run this after ufw reset
+# Cloudflare ranges (IPv4 + IPv6)
 for ip in $(curl -s https://www.cloudflare.com/ips-v4); do 
   ufw allow from $ip to any port 80,443 proto tcp
 done
@@ -106,8 +134,7 @@ done
 
 **Best Practices**:
 - Run the Cloudflare IP update script weekly (add to cron or maintenance script)
-- In Cloudflare dashboard: Enable **"Only allow Cloudflare IPs"** under **SSL/TLS → Origin Server** or use **Cloudflare Tunnel** (Zero Trust) for even stronger isolation (recommended for production)
-- Consider using Cloudflare Spectrum or Access policies for additional protection
+- In Cloudflare dashboard: Enable **"Only allow Cloudflare IPs"** under **SSL/TLS → Origin Server** or use **Cloudflare Tunnel** for stronger isolation
 
 Continue with Swarm rules:
 
@@ -267,7 +294,7 @@ LOG="/opt/openclaw-monitoring/logs/maintenance-$(date +%F-%H%M).log"
 
 echo "=== OpenClaw Maintenance Run - $(date) ===" | tee -a $LOG
 
-# Backup volume (optional but recommended)
+# Backup volume
 echo "→ Backing up ~/.openclaw volume" | tee -a $LOG
 tar -czf /opt/openclaw-monitoring/backups/openclaw-data-$(date +%F).tar.gz -C /var/lib/docker/volumes/openclaw-data/_data . 2>> $LOG
 
@@ -332,8 +359,6 @@ chmod +x /opt/openclaw-monitoring/*.sh
 0 2 * * * /opt/openclaw-monitoring/cleanup.sh
 ```
 
-**Best Practice**: Review logs in `/opt/openclaw-monitoring/logs/` after each run. Keep backups of the `openclaw-data` volume before major updates.
-
 ### Step 12: Troubleshooting
 - Sandbox fails → Check `docker-proxy` logs and sandbox container exits
 - Gateway unreachable → Verify `loopback` + `trustedProxies`
@@ -342,14 +367,12 @@ chmod +x /opt/openclaw-monitoring/*.sh
 
 ### Step 13: Automated Periodic Checks
 
-Create a dedicated monitoring directory and install these scripts on the leader node (`nyc`).
-
 ```bash
 mkdir -p /opt/openclaw-monitoring/logs
 cd /opt/openclaw-monitoring
 ```
 
-#### 1. Daily Health Check Script
+#### Daily Health Check Script
 ```bash
 cat > /opt/openclaw-monitoring/openclaw-daily-check.sh << 'EOF'
 #!/bin/bash
@@ -357,49 +380,32 @@ LOG="/opt/openclaw-monitoring/logs/daily-$(date +%F).log"
 
 echo "=== OpenClaw Daily Check - $(date) ===" | tee -a $LOG
 
-# Doctor
-echo "→ Running openclaw doctor" | tee -a $LOG
 docker exec $(docker ps -q -f name=srv-captain--openclaw) openclaw doctor >> $LOG 2>&1
-
-# Service health & placement
-echo "→ Checking services on nyc" | tee -a $LOG
 docker service ls --format "{{.Name}} {{.Replicas}} {{.Image}}" | tee -a $LOG
 docker node ps nyc --format "{{.Name}} {{.CurrentState}}" | tee -a $LOG
-
-# Constraint verification
-echo "→ Verifying trusted node constraint" | tee -a $LOG
 docker service inspect srv-captain--openclaw --format '{{json .Spec.TaskTemplate.Placement.Constraints}}' | tee -a $LOG
 
-# NFS & Firewall quick checks
-echo "→ NFS mounts" | tee -a $LOG
 mount | grep /captain/data | tee -a $LOG
-
-echo "→ Firewall status" | tee -a $LOG
 ufw status | head -n 20 | tee -a $LOG
 
 echo "=== Daily Check Complete ===" | tee -a $LOG
 EOF
 ```
 
-#### 2. Weekly Security Audit Script
+#### Weekly Security Audit Script
 ```bash
 cat > /opt/openclaw-monitoring/openclaw-weekly-audit.sh << 'EOF'
 #!/bin/bash
 LOG="/opt/openclaw-monitoring/logs/weekly-$(date +%F).log"
 
 echo "=== OpenClaw Weekly Security Audit - $(date) ===" | tee -a $LOG
-
 docker exec $(docker ps -q -f name=srv-captain--openclaw) openclaw security audit --deep --fix >> $LOG 2>&1
-
-# Update OpenClaw image if newer tag exists (manual approval recommended)
-echo "→ Checking for OpenClaw updates..." | tee -a $LOG
 docker service update --force --image openclaw/openclaw:2026.2.15 srv-captain--openclaw >> $LOG 2>&1
-
 echo "=== Weekly Audit Complete ===" | tee -a $LOG
 EOF
 ```
 
-#### 3. Constraint & Placement Checker
+#### Constraint Checker
 ```bash
 cat > /opt/openclaw-monitoring/check-constraints.sh << 'EOF'
 #!/bin/bash
@@ -414,26 +420,14 @@ EOF
 chmod +x /opt/openclaw-monitoring/*.sh
 ```
 
-#### Add to Cron (on nyc)
-```bash
-crontab -e
-```
-
-Add these lines:
+#### Cron (on nyc)
 ```cron
-# Daily at 6:00 AM
 0 6 * * * /opt/openclaw-monitoring/openclaw-daily-check.sh
-
-# Weekly on Sunday at 3:00 AM
 0 3 * * 0 /opt/openclaw-monitoring/openclaw-weekly-audit.sh
-
-# Optional: Constraint check every 6 hours
 0 */6 * * * /opt/openclaw-monitoring/check-constraints.sh >> /opt/openclaw-monitoring/logs/constraints.log 2>&1
 ```
 
-**Recommended (Expert)**: Use systemd timers instead of cron for better reliability and logging.
-
-**Done.** This deployment follows current 2026.2 OpenClaw security best practices with the trusted node set to `nyc`.
+**Done.** This deployment follows current 2026.2 OpenClaw security best practices.
 
 **Next recommended actions**:
 1. Run the node label command for `nyc`
