@@ -27,6 +27,7 @@ All sensitive services pinned to a single trusted node (`nyc`).
 - [Step 11: Verification](#step-11-verification)
 - [Step 12: Maintenance](#step-12-maintenance)
 - [Step 13: Troubleshooting](#step-13-troubleshooting)
+- [Step 14: Disaster Recovery & Failover](#step-14-disaster-recovery--failover)
 
 ---
 
@@ -41,9 +42,13 @@ All sensitive services pinned to a single trusted node (`nyc`).
 sudo apt update
 sudo apt install ufw -y
 
-# 2. Install ufw-docker
+# 2. Install ufw-docker (verify checksum after download)
 sudo wget -O /usr/local/bin/ufw-docker \
   https://github.com/chaifeng/ufw-docker/raw/master/ufw-docker
+# Verify the download before making it executable:
+#   sha256sum /usr/local/bin/ufw-docker
+# Compare against the known hash from the ufw-docker releases page.
+# Only proceed if the hash matches.
 sudo chmod +x /usr/local/bin/ufw-docker
 
 # 3. Initial configuration (ufw-docker is installed in Step 6 after full reset)
@@ -105,10 +110,16 @@ docker node update --label-add openclaw.trusted=true nyc
 
 ### Step 4: Join Additional Manager Nodes
 
-On the other two nodes:
+On the other two **manager** nodes:
 
 ```bash
 docker swarm join --token <MANAGER_TOKEN_FROM_NYC> <NYC_LEADER_IP>:2377
+```
+
+On the **worker** node:
+
+```bash
+docker swarm join --token <WORKER_TOKEN_FROM_NYC> <NYC_LEADER_IP>:2377
 ```
 
 Verify:
@@ -136,8 +147,8 @@ exportfs -ra && systemctl restart nfs-kernel-server
 ```bash
 apt install nfs-common -y
 mkdir -p /captain/data
-mount -o nosuid <NFS_SERVER_IP>:/captain/data /captain/data
-echo "<NFS_SERVER_IP>:/captain/data /captain/data nfs defaults,nosuid 0 0" >> /etc/fstab
+mount -o nfsvers=4,nosuid,noexec,nodev <NFS_SERVER_IP>:/captain/data /captain/data
+echo "<NFS_SERVER_IP>:/captain/data /captain/data nfs4 defaults,nosuid,noexec,nodev 0 0" >> /etc/fstab
 mount -a
 ```
 
@@ -152,11 +163,15 @@ ufw --force reset
 ufw default deny incoming
 ufw default allow outgoing
 
-ufw allow from $ADMIN_IP to any port 9922 proto tcp
-ufw limit 9922/tcp
+ufw limit from $ADMIN_IP to any port 9922 proto tcp
 ```
 
 #### Cloudflare Ingress Setup
+
+> **Security note**: These IPs are fetched over HTTPS, but you should verify them against
+> [Cloudflare's published IP ranges](https://www.cloudflare.com/ips/) before applying.
+> Consider pinning the expected CIDRs in a local file for reproducible, auditable firewall rules.
+
 ```bash
 for ip in $(curl -s https://www.cloudflare.com/ips-v4); do
   ufw allow from $ip to any port 80,443 proto tcp
@@ -174,13 +189,19 @@ done
 for ip in <ALL_NODE_IPS>; do
   ufw allow from $ip to any port 2377,7946 proto tcp
   ufw allow from $ip to any port 7946,4789 proto udp
-  # NFS (restrict to Swarm nodes only — required for CapRover HA in Step 5)
-  ufw allow from $ip to any port 2049,111 proto tcp
 done
 
-ufw-docker install --confirm-license
+ufw-docker install
 systemctl restart docker
 ufw --force enable
+```
+
+#### NFS Server Firewall (Run Only on NFS Server Node)
+```bash
+# NFSv4 only — port 2049; port 111/rpcbind is not needed
+for ip in <NFS_CLIENT_IPS>; do
+  ufw allow from $ip to any port 2049 proto tcp
+done
 ```
 
 ### Step 7: Deploy Docker Socket Proxy
@@ -201,6 +222,21 @@ services:
       PING: "1"
       EVENTS: "1"
       EXEC: "1"
+      # Explicitly deny sensitive APIs (defense-in-depth — defaults are 0)
+      BUILD: "0"
+      COMMIT: "0"
+      CONFIGS: "0"
+      DISTRIBUTION: "0"
+      NETWORKS: "0"
+      NODES: "0"
+      PLUGINS: "0"
+      SECRETS: "0"
+      SERVICES: "0"
+      SESSION: "0"
+      SWARM: "0"
+      SYSTEM: "0"
+      TASKS: "0"
+      VOLUMES: "0"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     # NOTE: deploy block is for documentation only — CapRover ignores it.
@@ -213,6 +249,10 @@ services:
         limits:
           cpus: "0.5"
           memory: 512M
+    # networks is also ignored by CapRover — applied via override.
+    networks:
+      - captain-overlay-network
+      - openclaw-net
 ```
 
 ### Step 8: Deploy OpenClaw Gateway (Primary Service)
@@ -243,6 +283,9 @@ services:
           memory: 6G
       restart_policy:
         condition: on-failure
+    networks:
+      - captain-overlay-network
+      - openclaw-net
 ```
 
 ### Step 9: Deploy Egress Proxy (Squid)
@@ -254,22 +297,38 @@ mkdir -p /opt/openclaw-config
 cat > /opt/openclaw-config/squid.conf << 'EOF'
 http_port 3128
 
-# Only allow port 443 (HTTPS)
+# Only allow HTTPS port (443)
 acl Safe_ports port 443
 http_access deny !Safe_ports
+
+# Restrict client source to Docker overlay networks
+# NOTE: Tighten these to your actual overlay subnet for defense-in-depth:
+#   docker network inspect openclaw-net --format '{{range .IPAM.Config}}{{.Subnet}}{{end}}'
+acl localnet src 10.0.0.0/8
+acl localnet src 172.16.0.0/12
+http_access deny !localnet
 
 # Whitelist LLM provider API domains (add your providers here)
 acl llm_apis dstdomain .anthropic.com
 acl llm_apis dstdomain .openai.com
-# acl llm_apis dstdomain .api.groq.com
+# acl llm_apis dstdomain .groq.com
 # acl llm_apis dstdomain .googleapis.com
 
-# Only allow HTTPS CONNECT to whitelisted domains (no plain HTTP)
+# CONNECT tunneling (used for all HTTPS requests through the proxy)
 acl CONNECT method CONNECT
+http_access deny CONNECT !llm_apis
 http_access allow CONNECT llm_apis
+
+# Allow plain HTTP(S) forwarding to whitelisted domains only
+http_access allow llm_apis
 
 # Deny everything else
 http_access deny all
+
+# Hardening
+via off
+forwarded_for delete
+httpd_suppress_version_string on
 EOF
 ```
 
@@ -278,7 +337,7 @@ Then deploy via CapRover:
 captainVersion: 4
 services:
   openclaw-egress:
-    image: ubuntu/squid:6.10-24.04_beta
+    image: ubuntu/squid:6.6-24.04_edge
     volumes:
       - /opt/openclaw-config/squid.conf:/etc/squid/squid.conf:ro
     # NOTE: deploy block is for documentation only — CapRover ignores it.
@@ -291,6 +350,9 @@ services:
         limits:
           cpus: "0.5"
           memory: 512M
+    networks:
+      - captain-overlay-network
+      - openclaw-net
 ```
 
 ### Step 10: Post-Deployment Configuration
@@ -311,9 +373,13 @@ CapRover's `captainVersion: 4` parser ignores `deploy` blocks. You must apply pl
         "MemoryBytes": 536870912,
         "NanoCPUs": 500000000
       }
+    },
+    "RestartPolicy": {
+      "Condition": "on-failure"
     }
   },
   "Networks": [
+    { "Target": "captain-overlay-network" },
     { "Target": "openclaw-net" }
   ]
 }
@@ -345,6 +411,7 @@ CapRover's `captainVersion: 4` parser ignores `deploy` blocks. You must apply pl
     }
   },
   "Networks": [
+    { "Target": "captain-overlay-network" },
     { "Target": "openclaw-net" }
   ]
 }
@@ -362,19 +429,23 @@ CapRover's `captainVersion: 4` parser ignores `deploy` blocks. You must apply pl
         "MemoryBytes": 536870912,
         "NanoCPUs": 500000000
       }
+    },
+    "RestartPolicy": {
+      "Condition": "on-failure"
     }
   },
   "Networks": [
+    { "Target": "captain-overlay-network" },
     { "Target": "openclaw-net" }
   ]
 }
 ```
 
-> **Important**: The `Networks` key adds `openclaw-net` to each service. Depending on how CapRover merges overrides, this may **replace** the default `captain-overlay-network` instead of appending. After applying, verify that services are still attached to both networks:
+> **Important**: Both `captain-overlay-network` (for CapRover service discovery via `srv-captain--<name>`) and `openclaw-net` (for encrypted inter-service traffic) are required. If either network is missing, services cannot communicate. After applying, verify:
 > ```bash
 > docker service inspect srv-captain--openclaw --format '{{json .Spec.TaskTemplate.Networks}}'
 > ```
-> If `captain-overlay-network` is missing, add it back to the `Networks` array in each override.
+> Output should list both network targets.
 
 After applying overrides, force-update each service:
 ```bash
@@ -393,38 +464,52 @@ docker service inspect srv-captain--openclaw --format '{{json .Spec.TaskTemplate
 
 #### Step 10.2: Provision API Keys
 
-OpenClaw needs LLM provider API keys to function. Provision them inside the container:
+OpenClaw needs LLM provider API keys to function. Use Docker Swarm secrets (recommended) to avoid leaking keys to the process table or shell history.
 
+**Recommended: Docker Swarm secrets**
+```bash
+# Create secrets from files (not CLI args) to avoid process-table exposure.
+# Write each key to a temporary file, then pipe it in:
+touch /tmp/anthropic_key && chmod 600 /tmp/anthropic_key
+nano /tmp/anthropic_key   # paste your key, save, exit
+docker secret create anthropic_api_key /tmp/anthropic_key
+shred -u /tmp/anthropic_key
+
+# Repeat for other providers as needed
+```
+Then reference the secret in the service configuration via Service Update Override.
+
+**Alternative (less secure)**: Provision keys directly inside the container.
+Note that `docker exec` commands expose arguments in the process table — use an interactive shell:
 ```bash
 docker exec -it $(docker ps -q -f "name=srv-captain--openclaw\.") sh
 
-# Create .env file for API keys
-cat > /root/.openclaw/.env << 'ENVEOF'
-ANTHROPIC_API_KEY=sk-ant-your-key-here
-# OPENAI_API_KEY=sk-your-key-here
-# Add other provider keys as needed
-ENVEOF
+# Create .env file for API keys (type/paste — do not pass keys as CLI args)
+nano /root/.openclaw/.env
+# Add: ANTHROPIC_API_KEY=sk-ant-your-key-here
+# Add: OPENAI_API_KEY=sk-your-key-here (if needed)
 
 chmod 600 /root/.openclaw/.env
 exit
 ```
-
-> **Alternative (recommended)**: Use Docker Swarm secrets for API key injection:
-> ```bash
-> echo "sk-ant-your-key-here" | docker secret create anthropic_api_key -
-> ```
-> Then reference the secret in the service configuration via Service Update Override.
 
 #### Step 10.3: Gateway and Sandbox Hardening
 
 Generate the gateway password on the host (where `openssl` is available), then apply all hardening config inside the container:
 
 ```bash
+# Ensure monitoring directory exists (also created in Step 12 — safe to run twice)
+mkdir -p /opt/openclaw-monitoring/{logs,backups}
+chmod 700 /opt/openclaw-monitoring /opt/openclaw-monitoring/logs /opt/openclaw-monitoring/backups
+
 # Generate password on the host and save to a secured file (not stdout)
-GW_PASSWORD=$(openssl rand -hex 32)
-echo "$GW_PASSWORD" > /opt/openclaw-monitoring/.gateway-password
+openssl rand -hex 32 > /opt/openclaw-monitoring/.gateway-password
 chmod 600 /opt/openclaw-monitoring/.gateway-password
 echo "Gateway password saved to /opt/openclaw-monitoring/.gateway-password"
+
+# Copy the password file into the container (avoids process-table exposure)
+docker cp /opt/openclaw-monitoring/.gateway-password \
+  $(docker ps -q -f "name=srv-captain--openclaw\."):/tmp/.gw-pass
 
 # Apply hardening inside the container
 docker exec -it $(docker ps -q -f "name=srv-captain--openclaw\.") sh
@@ -443,7 +528,9 @@ openclaw config set gateway.trustedProxies '["127.0.0.1", "<OVERLAY_SUBNET>"]'
 # Fallback if you cannot determine the exact subnet (less secure — trusts all RFC 1918):
 # openclaw config set gateway.trustedProxies '["127.0.0.1", "10.0.0.0/8", "172.16.0.0/12"]'
 
-openclaw config set gateway.password "<PASTE_GW_PASSWORD_HERE>"
+# Set password from file (avoids leaking to process table via CLI args)
+openclaw config set gateway.password "$(cat /tmp/.gw-pass)"
+rm -f /tmp/.gw-pass
 
 # Sandbox isolation
 openclaw config set agents.defaults.sandbox.mode "all"
@@ -509,6 +596,7 @@ curl -I https://openclaw.yourdomain.com
 
 ```bash
 mkdir -p /opt/openclaw-monitoring/{logs,backups}
+chmod 700 /opt/openclaw-monitoring /opt/openclaw-monitoring/logs /opt/openclaw-monitoring/backups
 ```
 
 **Main Maintenance Script** (`openclaw-maintenance.sh`):
@@ -518,42 +606,54 @@ set -euo pipefail
 LOG="/opt/openclaw-monitoring/logs/maintenance-$(date +%F-%H%M).log"
 OC_CONTAINER() { docker ps -q -f "name=srv-captain--openclaw\."; }
 
-echo "=== OpenClaw Maintenance Run - $(date) ===" | tee -a "$LOG"
+(
+  flock -n 200 || { echo "Another maintenance run is already in progress"; exit 1; }
 
-# Backup OpenClaw data
-tar -czf /opt/openclaw-monitoring/backups/openclaw-data-$(date +%F).tar.gz \
-  -C /var/lib/docker/volumes/openclaw-data/_data . 2>> "$LOG"
+  echo "=== OpenClaw Maintenance Run - $(date) ===" | tee -a "$LOG"
 
-# Security audit (before force-update, while container is stable)
-docker exec $(OC_CONTAINER) openclaw security audit --deep --fix >> "$LOG" 2>&1
+  # Backup OpenClaw data via a temporary container (avoids relying on Docker internals)
+  docker run --rm \
+    -v openclaw-data:/source:ro \
+    -v /opt/openclaw-monitoring/backups:/backup \
+    alpine:3.21 tar -czf "/backup/openclaw-data-$(date +%F).tar.gz" -C /source . 2>> "$LOG"
 
-# Force-update to pinned image (catches config drift)
-docker service update --force --image openclaw/openclaw:2026.2.15 srv-captain--openclaw >> "$LOG" 2>&1
+  # Security audit (before force-update, while container is stable)
+  CID=$(OC_CONTAINER)
+  if [ -n "$CID" ]; then
+    docker exec "$CID" openclaw security audit --deep --fix >> "$LOG" 2>&1
+  else
+    echo "WARNING: Container not running, skipping pre-update audit" >> "$LOG"
+  fi
 
-# Wait for new container to be running after force-update
-echo "Waiting for new container to stabilize..." >> "$LOG"
-sleep 30
-RETRIES=0
-while [ -z "$(OC_CONTAINER)" ] && [ $RETRIES -lt 12 ]; do
-  sleep 5
-  RETRIES=$((RETRIES + 1))
-done
+  # Force-update to pinned image (catches config drift)
+  docker service update --force --image openclaw/openclaw:2026.2.15 srv-captain--openclaw >> "$LOG" 2>&1
 
-if [ -z "$(OC_CONTAINER)" ]; then
-  echo "ERROR: Container did not stabilize after 90s" | tee -a "$LOG"
-  # Continue to cleanup even on failure
-else
-  # Health check (against the new container)
-  docker exec $(OC_CONTAINER) openclaw doctor >> "$LOG" 2>&1
-fi
+  # Wait for new container to be running after force-update
+  echo "Waiting for new container to stabilize..." >> "$LOG"
+  sleep 30
+  RETRIES=0
+  while [ -z "$(OC_CONTAINER)" ] && [ $RETRIES -lt 12 ]; do
+    sleep 5
+    RETRIES=$((RETRIES + 1))
+  done
 
-# Prune old backups (keep 14 days)
-find /opt/openclaw-monitoring/backups -name "*.tar.gz" -mtime +14 -delete
+  if [ -z "$(OC_CONTAINER)" ]; then
+    echo "ERROR: Container did not stabilize after 90s" | tee -a "$LOG"
+    # Continue to cleanup even on failure
+  else
+    # Health check (against the new container)
+    docker exec "$(OC_CONTAINER)" openclaw doctor >> "$LOG" 2>&1
+  fi
 
-# Prune old logs (keep 30 days)
-find /opt/openclaw-monitoring/logs -name "*.log" -mtime +30 -delete
+  # Prune old backups (keep 14 days)
+  find /opt/openclaw-monitoring/backups -name "*.tar.gz" -mtime +14 -delete
 
-echo "=== Maintenance Complete ===" | tee -a "$LOG"
+  # Prune old logs (keep 30 days)
+  find /opt/openclaw-monitoring/logs -name "*.log" -mtime +30 -delete
+
+  echo "=== Maintenance Complete ===" | tee -a "$LOG"
+
+) 200>/opt/openclaw-monitoring/.maintenance.lock
 ```
 
 **Password Rotation Script** (`rotate-password.sh`):
@@ -561,27 +661,48 @@ echo "=== Maintenance Complete ===" | tee -a "$LOG"
 #!/bin/bash
 set -euo pipefail
 LOG="/opt/openclaw-monitoring/logs/password-rotation-$(date +%F).log"
+PASS_FILE="/opt/openclaw-monitoring/.gateway-password"
 OC_CONTAINER() { docker ps -q -f "name=srv-captain--openclaw\."; }
 
-echo "=== Password Rotation - $(date) ===" | tee -a "$LOG"
+(
+  flock -n 200 || { echo "Another rotation is already running"; exit 1; }
 
-NEW_PASSWORD=$(openssl rand -hex 32)
-docker exec $(OC_CONTAINER) \
-  openclaw config set gateway.password "$NEW_PASSWORD" >> "$LOG" 2>&1
+  echo "=== Password Rotation - $(date) ===" | tee -a "$LOG"
 
-docker service update --force srv-captain--openclaw >> "$LOG" 2>&1
+  # Generate new password to file (never as a CLI argument)
+  openssl rand -hex 32 > "${PASS_FILE}.new"
+  chmod 600 "${PASS_FILE}.new"
 
-echo "Password rotated successfully. Update any clients with the new password." | tee -a "$LOG"
-echo "=== Rotation Complete ===" | tee -a "$LOG"
+  # Copy into container and set from file to avoid process-table leak
+  CONTAINER_ID=$(OC_CONTAINER)
+  docker cp "${PASS_FILE}.new" "${CONTAINER_ID}:/tmp/.gw-pass"
+  docker exec "$CONTAINER_ID" \
+    sh -c 'openclaw config set gateway.password "$(cat /tmp/.gw-pass)" && rm -f /tmp/.gw-pass' >> "$LOG" 2>&1
+
+  # Persist password file on host (rotate backup)
+  mv "${PASS_FILE}.new" "$PASS_FILE"
+
+  docker service update --force srv-captain--openclaw >> "$LOG" 2>&1
+
+  echo "Password rotated. New password saved to $PASS_FILE" | tee -a "$LOG"
+  echo "=== Rotation Complete ===" | tee -a "$LOG"
+
+) 200>/opt/openclaw-monitoring/.rotate-password.lock
 ```
 
-**Cron Schedule** (add to `nyc` node):
+Make scripts executable:
+```bash
+chmod 700 /opt/openclaw-monitoring/openclaw-maintenance.sh
+chmod 700 /opt/openclaw-monitoring/rotate-password.sh
+```
+
+**Cron Schedule** (add to root's crontab on `nyc`: `sudo crontab -e`):
 ```bash
 # Weekly maintenance (Sunday 3 AM)
-0 3 * * 0 /opt/openclaw-monitoring/openclaw-maintenance.sh
+0 3 * * 0 /opt/openclaw-monitoring/openclaw-maintenance.sh >> /opt/openclaw-monitoring/logs/maintenance-cron.log 2>&1
 
 # Monthly password rotation (1st of month, 4 AM)
-0 4 1 * * /opt/openclaw-monitoring/rotate-password.sh
+0 4 1 * * /opt/openclaw-monitoring/rotate-password.sh >> /opt/openclaw-monitoring/logs/rotation-cron.log 2>&1
 ```
 
 ### Step 13: Troubleshooting
@@ -595,9 +716,277 @@ echo "=== Rotation Complete ===" | tee -a "$LOG"
 | Service not on trusted node | `docker service ps srv-captain--openclaw` | Re-apply Service Update Override constraints |
 | Failed update | `docker service rollback srv-captain--openclaw` | Rollback to previous service spec, then investigate |
 
+### Step 14: Disaster Recovery & Failover
+
+> **Architecture trade-off**: This deployment prioritizes security over availability by pinning all services to a single trusted node (`nyc`). If `nyc` becomes unavailable, OpenClaw is fully offline until manual failover completes. This section documents the recovery procedure.
+
+#### Recovery Objectives
+
+| Metric | Target | Notes |
+|--------|--------|-------|
+| **RTO** (Recovery Time Objective) | **30 minutes** | Manual failover to a standby manager node |
+| **RPO** (Recovery Point Objective) | **24 hours** | Limited by daily backup schedule (Step 12). Reduce by increasing cron frequency. |
+| **Quorum loss RTO** | **60 minutes** | Requires Swarm re-initialization if 2+ managers are lost |
+
+#### 14.1 Prerequisites (Do This Now, Before a Failure)
+
+Run these steps on a standby manager node (e.g., `mgr2`) while `nyc` is still healthy.
+
+```bash
+# 1. Identify your standby node hostname
+STANDBY_NODE="mgr2"   # replace with your chosen standby manager
+
+# 2. Pre-install NFS client (already done if Step 5 was followed)
+apt install nfs-common -y
+
+# 3. Pre-create the config directory and copy squid.conf
+mkdir -p /opt/openclaw-config
+scp nyc:/opt/openclaw-config/squid.conf /opt/openclaw-config/squid.conf
+
+# 4. Pre-create the monitoring directory structure
+mkdir -p /opt/openclaw-monitoring/{logs,backups}
+chmod 700 /opt/openclaw-monitoring /opt/openclaw-monitoring/logs /opt/openclaw-monitoring/backups
+
+# 5. Copy maintenance and rotation scripts
+scp nyc:/opt/openclaw-monitoring/openclaw-maintenance.sh /opt/openclaw-monitoring/
+scp nyc:/opt/openclaw-monitoring/rotate-password.sh /opt/openclaw-monitoring/
+chmod 700 /opt/openclaw-monitoring/*.sh
+
+# 6. Copy the current gateway password file
+scp nyc:/opt/openclaw-monitoring/.gateway-password /opt/openclaw-monitoring/
+chmod 600 /opt/openclaw-monitoring/.gateway-password
+
+# 7. Export current Service Update Overrides (run on any manager)
+mkdir -p /opt/openclaw-config/overrides
+for svc in docker-proxy openclaw openclaw-egress; do
+  docker service inspect "srv-captain--${svc}" \
+    --format '{{json .Spec}}' > "/opt/openclaw-config/overrides/${svc}-spec.json"
+done
+
+echo "Standby node $STANDBY_NODE is pre-staged for failover."
+```
+
+Add a cron job to keep the standby in sync (daily at 2 AM):
+```bash
+# Sync DR assets from nyc (add to standby node crontab)
+0 2 * * * rsync -az --chmod=F600,D700 nyc:/opt/openclaw-config/ /opt/openclaw-config/ 2>/dev/null
+0 2 * * * rsync -az --chmod=F600,D700 nyc:/opt/openclaw-monitoring/.gateway-password /opt/openclaw-monitoring/ 2>/dev/null
+```
+
+#### 14.2 Scenario A — `nyc` Node Failure (Swarm Quorum Intact)
+
+Use this procedure when `nyc` is down but at least 2 of the 3 manager nodes are still healthy and Swarm quorum is maintained.
+
+**Diagnose:**
+```bash
+# Run on any surviving manager
+docker node ls
+# nyc should show "Down" or "Unreachable" status
+# Verify quorum: at least 2 managers must show "Ready"
+```
+
+**Failover:**
+```bash
+STANDBY_NODE="mgr2"   # your pre-staged standby
+
+# 1. Label the standby node as trusted
+docker node update --label-add openclaw.trusted=true "$STANDBY_NODE"
+
+# 2. Verify the NFS mount is active on the standby (from Step 5)
+#    Run ON the standby node:
+mount | grep /captain/data
+# If not mounted:
+#   mount -o nfsvers=4,nosuid,noexec,nodev <NFS_SERVER_IP>:/captain/data /captain/data
+# NOTE: If nyc was also the NFS server, see Section 14.4 below.
+
+# 3. Force-update services to reschedule onto the new trusted node
+docker service update --force srv-captain--docker-proxy
+docker service update --force srv-captain--openclaw
+docker service update --force srv-captain--openclaw-egress
+
+# 4. Wait for services to converge (check every 10s, up to 2 minutes)
+for svc in docker-proxy openclaw openclaw-egress; do
+  echo "Waiting for srv-captain--${svc}..."
+  TRIES=0
+  while [ $TRIES -lt 12 ]; do
+    STATE=$(docker service ps "srv-captain--${svc}" \
+      --filter desired-state=running --format '{{.CurrentState}}' | head -1)
+    if echo "$STATE" | grep -q "Running"; then
+      echo "  srv-captain--${svc}: $STATE"
+      break
+    fi
+    sleep 10
+    TRIES=$((TRIES + 1))
+  done
+  if [ $TRIES -eq 12 ]; then
+    echo "  WARNING: srv-captain--${svc} did not converge in 120s"
+  fi
+done
+
+# 5. Re-apply gateway hardening (password + config stored in volume survives,
+#    but verify it persisted through the reschedule)
+docker exec $(docker ps -q -f "name=srv-captain--openclaw\.") openclaw doctor
+
+# 6. Update Cloudflare DNS to point to the standby node's public IP
+#    (or update your Cloudflare Tunnel origin if using tunnels)
+echo "ACTION REQUIRED: Update Cloudflare DNS A record to point to $STANDBY_NODE public IP"
+
+# 7. Verify end-to-end
+docker node ps "$STANDBY_NODE"
+docker exec $(docker ps -q -f "name=srv-captain--openclaw\.") \
+  curl -x http://srv-captain--openclaw-egress:3128 -I https://api.anthropic.com
+```
+
+**After `nyc` recovers:**
+```bash
+# Option A: Fail back to nyc (recommended if nyc was the NFS server)
+docker node update --label-rm openclaw.trusted "$STANDBY_NODE"
+docker node update --label-add openclaw.trusted=true nyc
+docker service update --force srv-captain--docker-proxy
+docker service update --force srv-captain--openclaw
+docker service update --force srv-captain--openclaw-egress
+# Update Cloudflare DNS back to nyc
+
+# Option B: Keep running on standby (skip if nyc is the NFS server)
+docker node update --label-rm openclaw.trusted nyc
+# nyc becomes the new standby — re-run Section 14.1 with roles reversed
+```
+
+#### 14.3 Scenario B — Swarm Quorum Lost (2+ Managers Down)
+
+If only 1 manager remains, Swarm is read-only and cannot schedule services.
+
+```bash
+# 1. Force the surviving manager to become a single-node quorum
+#    WARNING: This is destructive — lost managers cannot rejoin without re-init.
+#    Pending uncommitted Raft entries (service updates, secrets) may be lost.
+docker swarm init --force-new-cluster --advertise-addr <SURVIVING_NODE_IP>
+
+# 2. Verify the node is now a leader
+docker node ls
+# Should show only the surviving node as "Leader"
+
+# 3. Label this node as trusted
+docker node update --label-add openclaw.trusted=true $(hostname)
+
+# 4. Recreate the overlay network if it was lost
+docker network ls | grep openclaw-net || \
+  docker network create --driver overlay --opt encrypted openclaw-net
+
+# 5. Force-update services
+docker service update --force srv-captain--docker-proxy
+docker service update --force srv-captain--openclaw
+docker service update --force srv-captain--openclaw-egress
+
+# 6. Verify services are running
+docker service ls
+docker node ps $(hostname)
+
+# 7. When other nodes are recovered, re-join them as managers
+docker swarm join-token manager
+# Run the join command on each recovered node
+```
+
+#### 14.4 NFS Server Failure
+
+If `nyc` was both the NFS server and is now down, the NFS mount will hang on all clients. CapRover state becomes unavailable.
+
+```bash
+# On the standby node:
+
+# 1. Force-unmount the stale NFS mount
+umount -f /captain/data 2>/dev/null || umount -l /captain/data
+
+# 2. Restore CapRover data
+#    NOTE: The Step 12 backup covers the openclaw-data Docker volume, not /captain/data.
+#    If you need CapRover state, restore it from a separate /captain/data backup (see below).
+mkdir -p /captain/data
+# If you have a captain-data backup:
+#   tar -xzf /opt/openclaw-monitoring/backups/captain-data-YYYY-MM-DD.tar.gz -C /captain/data
+
+# 3. Restore the openclaw-data Docker volume from backup
+LATEST_BACKUP=$(ls -t /opt/openclaw-monitoring/backups/openclaw-data-*.tar.gz 2>/dev/null | head -1)
+if [ -n "$LATEST_BACKUP" ]; then
+  docker volume create openclaw-data 2>/dev/null || true
+  docker run --rm \
+    -v openclaw-data:/target \
+    -v /opt/openclaw-monitoring/backups:/backup:ro \
+    alpine:3.21 sh -c "tar -xzf /backup/$(basename "$LATEST_BACKUP") -C /target"
+  echo "Restored openclaw-data volume from $LATEST_BACKUP"
+else
+  echo "WARNING: No openclaw-data backups found in /opt/openclaw-monitoring/backups/"
+fi
+
+# 4. Option B: Promote the standby as the new NFS server
+apt install nfs-kernel-server -y
+echo "/captain/data <SWARM_SUBNET_CIDR>(rw,sync,no_subtree_check,no_root_squash)" > /etc/exports
+exportfs -ra && systemctl restart nfs-kernel-server
+
+# 5. Update /etc/fstab on remaining client nodes to point to the new NFS server IP
+# On each client node:
+#   sed -i "s/<OLD_NFS_IP>/<NEW_NFS_IP>/" /etc/fstab
+#   mount -a
+
+# 6. Continue with failover (Section 14.2, starting at step 3)
+```
+
+#### 14.5 Backup Verification
+
+Run monthly to validate that backups are restorable.
+
+```bash
+#!/bin/bash
+set -euo pipefail
+LATEST=$(ls -t /opt/openclaw-monitoring/backups/*.tar.gz 2>/dev/null | head -1)
+if [ -z "$LATEST" ]; then
+  echo "ERROR: No backups found"
+  exit 1
+fi
+
+# Test extraction to a temporary directory
+VERIFY_DIR=$(mktemp -d)
+trap 'rm -rf "$VERIFY_DIR"' EXIT
+if tar -xzf "$LATEST" -C "$VERIFY_DIR" 2>&1; then
+  FILE_COUNT=$(find "$VERIFY_DIR" -type f | wc -l)
+  TOTAL_SIZE=$(du -sh "$VERIFY_DIR" | cut -f1)
+  echo "OK: Backup $LATEST verified — $FILE_COUNT files, $TOTAL_SIZE"
+else
+  echo "ERROR: Backup $LATEST is corrupted or unreadable"
+  exit 1
+fi
+```
+
+Save the script and add to cron on the standby node:
+```bash
+# Save the script above to /opt/openclaw-monitoring/verify-backup.sh, then:
+chmod 700 /opt/openclaw-monitoring/verify-backup.sh
+
+# Add to root's crontab (sudo crontab -e):
+# Monthly backup verification (15th of month, 5 AM)
+0 5 15 * * /opt/openclaw-monitoring/verify-backup.sh >> /opt/openclaw-monitoring/logs/backup-verify.log 2>&1
+```
+
+#### 14.6 DR Runbook Checklist
+
+Print this and keep it accessible for on-call personnel.
+
+| Step | Action | Command / Location | Done |
+|------|--------|--------------------|------|
+| 1 | Confirm `nyc` is down | `docker node ls` from any surviving manager | [ ] |
+| 2 | Determine quorum status | 2+ managers Ready → Section 14.2. 1 manager → Section 14.3 | [ ] |
+| 3 | Check NFS availability | `mount \| grep /captain/data` on standby | [ ] |
+| 4 | If NFS down, restore data | Section 14.4 | [ ] |
+| 5 | Label standby as trusted | `docker node update --label-add openclaw.trusted=true <standby>` | [ ] |
+| 6 | Force-update all 3 services | `docker service update --force srv-captain--<name>` | [ ] |
+| 7 | Wait for convergence | Check `docker service ps` for "Running" state | [ ] |
+| 8 | Verify `openclaw doctor` | `docker exec ... openclaw doctor` | [ ] |
+| 9 | Update Cloudflare DNS | Point A record to standby node public IP | [ ] |
+| 10 | Verify end-to-end | `curl -I https://openclaw.yourdomain.com` | [ ] |
+| 11 | Notify team | Confirm recovery, document timeline and root cause | [ ] |
+
 ---
 
-**Done.** Deploy services in order (Steps 1-9), apply Service Update Overrides and hardening (Step 10), verify (Step 11), then set up monitoring (Steps 12-13).
+**Done.** Deploy services in order (Steps 1-9), apply Service Update Overrides and hardening (Step 10), verify (Step 11), then set up monitoring (Steps 12-13). **Prepare DR standby (Step 14.1) immediately after initial deployment.**
 
 **Next recommended actions**:
 1. Start with Step 1 on all nodes
@@ -608,3 +997,4 @@ echo "=== Rotation Complete ===" | tee -a "$LOG"
 6. Apply hardening (Step 10.3)
 7. Verify everything (Step 11)
 8. Set up monitoring scripts (Step 12)
+9. **Pre-stage DR standby (Step 14.1) — do not defer**
