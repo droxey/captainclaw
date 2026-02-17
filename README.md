@@ -27,7 +27,6 @@ All sensitive services pinned to a single trusted node (`nyc`).
 - [Step 11: Verification](#step-11-verification)
 - [Step 12: Maintenance](#step-12-maintenance)
 - [Step 13: Troubleshooting](#step-13-troubleshooting)
-- [Step 14: Automated Periodic Checks](#step-14-automated-periodic-checks)
 
 ---
 
@@ -175,6 +174,8 @@ done
 for ip in <ALL_NODE_IPS>; do
   ufw allow from $ip to any port 2377,7946 proto tcp
   ufw allow from $ip to any port 7946,4789 proto udp
+  # NFS (restrict to Swarm nodes only — required for CapRover HA in Step 5)
+  ufw allow from $ip to any port 2049,111 proto tcp
 done
 
 ufw-docker install --confirm-license
@@ -369,6 +370,12 @@ CapRover's `captainVersion: 4` parser ignores `deploy` blocks. You must apply pl
 }
 ```
 
+> **Important**: The `Networks` key adds `openclaw-net` to each service. Depending on how CapRover merges overrides, this may **replace** the default `captain-overlay-network` instead of appending. After applying, verify that services are still attached to both networks:
+> ```bash
+> docker service inspect srv-captain--openclaw --format '{{json .Spec.TaskTemplate.Networks}}'
+> ```
+> If `captain-overlay-network` is missing, add it back to the `Networks` array in each override.
+
 After applying overrides, force-update each service:
 ```bash
 docker service update --force srv-captain--docker-proxy
@@ -413,9 +420,11 @@ exit
 Generate the gateway password on the host (where `openssl` is available), then apply all hardening config inside the container:
 
 ```bash
-# Generate password on the host
+# Generate password on the host and save to a secured file (not stdout)
 GW_PASSWORD=$(openssl rand -hex 32)
-echo "Save this gateway password: $GW_PASSWORD"
+echo "$GW_PASSWORD" > /opt/openclaw-monitoring/.gateway-password
+chmod 600 /opt/openclaw-monitoring/.gateway-password
+echo "Gateway password saved to /opt/openclaw-monitoring/.gateway-password"
 
 # Apply hardening inside the container
 docker exec -it $(docker ps -q -f "name=srv-captain--openclaw\.") sh
@@ -425,9 +434,15 @@ Inside the container shell:
 ```bash
 # Gateway — bind to all interfaces since CapRover's nginx reverse proxy
 # connects via the overlay network, not loopback.
-# trustedProxies should include CapRover's nginx (captain) service.
 openclaw config set gateway.bind "0.0.0.0"
-openclaw config set gateway.trustedProxies '["127.0.0.1", "10.0.0.0/8", "172.16.0.0/12"]'
+
+# trustedProxies: Replace <OVERLAY_SUBNET> with your actual Docker overlay subnet.
+# Find it with: docker network inspect captain-overlay-network --format '{{range .IPAM.Config}}{{.Subnet}}{{end}}'
+# Example: if the subnet is 10.0.1.0/24, use that instead of the broad /8 range.
+openclaw config set gateway.trustedProxies '["127.0.0.1", "<OVERLAY_SUBNET>"]'
+# Fallback if you cannot determine the exact subnet (less secure — trusts all RFC 1918):
+# openclaw config set gateway.trustedProxies '["127.0.0.1", "10.0.0.0/8", "172.16.0.0/12"]'
+
 openclaw config set gateway.password "<PASTE_GW_PASSWORD_HERE>"
 
 # Sandbox isolation
@@ -524,8 +539,13 @@ while [ -z "$(OC_CONTAINER)" ] && [ $RETRIES -lt 12 ]; do
   RETRIES=$((RETRIES + 1))
 done
 
-# Health check (against the new container)
-docker exec $(OC_CONTAINER) openclaw doctor >> "$LOG" 2>&1
+if [ -z "$(OC_CONTAINER)" ]; then
+  echo "ERROR: Container did not stabilize after 90s" | tee -a "$LOG"
+  # Continue to cleanup even on failure
+else
+  # Health check (against the new container)
+  docker exec $(OC_CONTAINER) openclaw doctor >> "$LOG" 2>&1
+fi
 
 # Prune old backups (keep 14 days)
 find /opt/openclaw-monitoring/backups -name "*.tar.gz" -mtime +14 -delete
@@ -575,18 +595,9 @@ echo "=== Rotation Complete ===" | tee -a "$LOG"
 | Service not on trusted node | `docker service ps srv-captain--openclaw` | Re-apply Service Update Override constraints |
 | Failed update | `docker service rollback srv-captain--openclaw` | Rollback to previous service spec, then investigate |
 
-### Step 14: Automated Periodic Checks
-
-Create directory:
-```bash
-mkdir -p /opt/openclaw-monitoring/logs
-```
-
-Then create the daily, weekly, and constraint check scripts (same as previous versions) and add them to cron.
-
 ---
 
-**Done.** Deploy services in order (Steps 1-9), apply Service Update Overrides and hardening (Step 10), verify (Step 11), then set up monitoring (Steps 12-14).
+**Done.** Deploy services in order (Steps 1-9), apply Service Update Overrides and hardening (Step 10), verify (Step 11), then set up monitoring (Steps 12-13).
 
 **Next recommended actions**:
 1. Start with Step 1 on all nodes
@@ -596,4 +607,4 @@ Then create the daily, weekly, and constraint check scripts (same as previous ve
 5. Provision API keys (Step 10.2)
 6. Apply hardening (Step 10.3)
 7. Verify everything (Step 11)
-8. Set up monitoring scripts (Steps 12, 14)
+8. Set up monitoring scripts (Step 12)
