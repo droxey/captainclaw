@@ -141,8 +141,8 @@ exportfs -ra && systemctl restart nfs-kernel-server
 ```bash
 apt install nfs-common -y
 mkdir -p /captain/data
-mount -o nosuid,noexec,nodev <NFS_SERVER_IP>:/captain/data /captain/data
-echo "<NFS_SERVER_IP>:/captain/data /captain/data nfs defaults,nosuid,noexec,nodev 0 0" >> /etc/fstab
+mount -o nfsvers=4,nosuid,noexec,nodev <NFS_SERVER_IP>:/captain/data /captain/data
+echo "<NFS_SERVER_IP>:/captain/data /captain/data nfs4 defaults,nosuid,noexec,nodev 0 0" >> /etc/fstab
 mount -a
 ```
 
@@ -184,8 +184,12 @@ done
 for ip in <ALL_NODE_IPS>; do
   ufw allow from $ip to any port 2377,7946 proto tcp
   ufw allow from $ip to any port 7946,4789 proto udp
-  # NFS (restrict to Swarm nodes only — required for CapRover HA in Step 5)
-  ufw allow from $ip to any port 2049,111 proto tcp
+done
+
+# NFS — only clients need to reach the NFS server on port 2049 (NFSv4 only; port 111/rpcbind not needed)
+# Run this rule ONLY on the NFS server node (nyc):
+for ip in <NFS_CLIENT_IPS>; do
+  ufw allow from $ip to any port 2049 proto tcp
 done
 
 ufw-docker install --confirm-license
@@ -772,7 +776,7 @@ docker node update --label-add openclaw.trusted=true "$STANDBY_NODE"
 #    Run ON the standby node:
 mount | grep /captain/data
 # If not mounted:
-#   mount -o nosuid,noexec,nodev <NFS_SERVER_IP>:/captain/data /captain/data
+#   mount -o nfsvers=4,nosuid,noexec,nodev <NFS_SERVER_IP>:/captain/data /captain/data
 # NOTE: If nyc was also the NFS server, see Section 14.4 below.
 
 # 3. Force-update services to reschedule onto the new trusted node
