@@ -41,9 +41,13 @@ All sensitive services pinned to a single trusted node (`nyc`).
 sudo apt update
 sudo apt install ufw -y
 
-# 2. Install ufw-docker
+# 2. Install ufw-docker (verify checksum after download)
 sudo wget -O /usr/local/bin/ufw-docker \
   https://github.com/chaifeng/ufw-docker/raw/master/ufw-docker
+# Verify the download before making it executable:
+#   sha256sum /usr/local/bin/ufw-docker
+# Compare against the known hash from the ufw-docker releases page.
+# Only proceed if the hash matches.
 sudo chmod +x /usr/local/bin/ufw-docker
 
 # 3. Initial configuration (ufw-docker is installed in Step 6 after full reset)
@@ -136,8 +140,8 @@ exportfs -ra && systemctl restart nfs-kernel-server
 ```bash
 apt install nfs-common -y
 mkdir -p /captain/data
-mount -o nosuid <NFS_SERVER_IP>:/captain/data /captain/data
-echo "<NFS_SERVER_IP>:/captain/data /captain/data nfs defaults,nosuid 0 0" >> /etc/fstab
+mount -o nosuid,noexec,nodev <NFS_SERVER_IP>:/captain/data /captain/data
+echo "<NFS_SERVER_IP>:/captain/data /captain/data nfs defaults,nosuid,noexec,nodev 0 0" >> /etc/fstab
 mount -a
 ```
 
@@ -157,6 +161,11 @@ ufw limit 9922/tcp
 ```
 
 #### Cloudflare Ingress Setup
+
+> **Security note**: These IPs are fetched over HTTPS, but you should verify them against
+> [Cloudflare's published IP ranges](https://www.cloudflare.com/ips/) before applying.
+> Consider pinning the expected CIDRs in a local file for reproducible, auditable firewall rules.
+
 ```bash
 for ip in $(curl -s https://www.cloudflare.com/ips-v4); do
   ufw allow from $ip to any port 80,443 proto tcp
@@ -201,6 +210,21 @@ services:
       PING: "1"
       EVENTS: "1"
       EXEC: "1"
+      # Explicitly deny sensitive APIs (defense-in-depth — defaults are 0)
+      BUILD: "0"
+      COMMIT: "0"
+      CONFIGS: "0"
+      DISTRIBUTION: "0"
+      NETWORKS: "0"
+      NODES: "0"
+      PLUGINS: "0"
+      SECRETS: "0"
+      SERVICES: "0"
+      SESSION: "0"
+      SWARM: "0"
+      SYSTEM: "0"
+      TASKS: "0"
+      VOLUMES: "0"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     # NOTE: deploy block is for documentation only — CapRover ignores it.
@@ -278,7 +302,7 @@ Then deploy via CapRover:
 captainVersion: 4
 services:
   openclaw-egress:
-    image: ubuntu/squid:6.10-24.04_beta
+    image: ubuntu/squid:6.6-24.04_edge
     volumes:
       - /opt/openclaw-config/squid.conf:/etc/squid/squid.conf:ro
     # NOTE: deploy block is for documentation only — CapRover ignores it.
@@ -393,27 +417,34 @@ docker service inspect srv-captain--openclaw --format '{{json .Spec.TaskTemplate
 
 #### Step 10.2: Provision API Keys
 
-OpenClaw needs LLM provider API keys to function. Provision them inside the container:
+OpenClaw needs LLM provider API keys to function. Use Docker Swarm secrets (recommended) to avoid leaking keys to the process table or shell history.
 
+**Recommended: Docker Swarm secrets**
+```bash
+# Create secrets from files (not CLI args) to avoid process-table exposure.
+# Write each key to a temporary file, then pipe it in:
+touch /tmp/anthropic_key && chmod 600 /tmp/anthropic_key
+nano /tmp/anthropic_key   # paste your key, save, exit
+docker secret create anthropic_api_key /tmp/anthropic_key
+shred -u /tmp/anthropic_key
+
+# Repeat for other providers as needed
+```
+Then reference the secret in the service configuration via Service Update Override.
+
+**Alternative (less secure)**: Provision keys directly inside the container.
+Note that `docker exec` commands expose arguments in the process table — use an interactive shell:
 ```bash
 docker exec -it $(docker ps -q -f "name=srv-captain--openclaw\.") sh
 
-# Create .env file for API keys
-cat > /root/.openclaw/.env << 'ENVEOF'
-ANTHROPIC_API_KEY=sk-ant-your-key-here
-# OPENAI_API_KEY=sk-your-key-here
-# Add other provider keys as needed
-ENVEOF
+# Create .env file for API keys (type/paste — do not pass keys as CLI args)
+nano /root/.openclaw/.env
+# Add: ANTHROPIC_API_KEY=sk-ant-your-key-here
+# Add: OPENAI_API_KEY=sk-your-key-here (if needed)
 
 chmod 600 /root/.openclaw/.env
 exit
 ```
-
-> **Alternative (recommended)**: Use Docker Swarm secrets for API key injection:
-> ```bash
-> echo "sk-ant-your-key-here" | docker secret create anthropic_api_key -
-> ```
-> Then reference the secret in the service configuration via Service Update Override.
 
 #### Step 10.3: Gateway and Sandbox Hardening
 
@@ -421,10 +452,13 @@ Generate the gateway password on the host (where `openssl` is available), then a
 
 ```bash
 # Generate password on the host and save to a secured file (not stdout)
-GW_PASSWORD=$(openssl rand -hex 32)
-echo "$GW_PASSWORD" > /opt/openclaw-monitoring/.gateway-password
+openssl rand -hex 32 > /opt/openclaw-monitoring/.gateway-password
 chmod 600 /opt/openclaw-monitoring/.gateway-password
 echo "Gateway password saved to /opt/openclaw-monitoring/.gateway-password"
+
+# Copy the password file into the container (avoids process-table exposure)
+docker cp /opt/openclaw-monitoring/.gateway-password \
+  $(docker ps -q -f "name=srv-captain--openclaw\."):/tmp/.gw-pass
 
 # Apply hardening inside the container
 docker exec -it $(docker ps -q -f "name=srv-captain--openclaw\.") sh
@@ -443,7 +477,9 @@ openclaw config set gateway.trustedProxies '["127.0.0.1", "<OVERLAY_SUBNET>"]'
 # Fallback if you cannot determine the exact subnet (less secure — trusts all RFC 1918):
 # openclaw config set gateway.trustedProxies '["127.0.0.1", "10.0.0.0/8", "172.16.0.0/12"]'
 
-openclaw config set gateway.password "<PASTE_GW_PASSWORD_HERE>"
+# Set password from file (avoids leaking to process table via CLI args)
+openclaw config set gateway.password "$(cat /tmp/.gw-pass)"
+rm -f /tmp/.gw-pass
 
 # Sandbox isolation
 openclaw config set agents.defaults.sandbox.mode "all"
@@ -509,6 +545,7 @@ curl -I https://openclaw.yourdomain.com
 
 ```bash
 mkdir -p /opt/openclaw-monitoring/{logs,backups}
+chmod 700 /opt/openclaw-monitoring /opt/openclaw-monitoring/logs /opt/openclaw-monitoring/backups
 ```
 
 **Main Maintenance Script** (`openclaw-maintenance.sh`):
@@ -518,42 +555,54 @@ set -euo pipefail
 LOG="/opt/openclaw-monitoring/logs/maintenance-$(date +%F-%H%M).log"
 OC_CONTAINER() { docker ps -q -f "name=srv-captain--openclaw\."; }
 
-echo "=== OpenClaw Maintenance Run - $(date) ===" | tee -a "$LOG"
+(
+  flock -n 200 || { echo "Another maintenance run is already in progress"; exit 1; }
 
-# Backup OpenClaw data
-tar -czf /opt/openclaw-monitoring/backups/openclaw-data-$(date +%F).tar.gz \
-  -C /var/lib/docker/volumes/openclaw-data/_data . 2>> "$LOG"
+  echo "=== OpenClaw Maintenance Run - $(date) ===" | tee -a "$LOG"
 
-# Security audit (before force-update, while container is stable)
-docker exec $(OC_CONTAINER) openclaw security audit --deep --fix >> "$LOG" 2>&1
+  # Backup OpenClaw data via a temporary container (avoids relying on Docker internals)
+  docker run --rm \
+    -v openclaw-data:/source:ro \
+    -v /opt/openclaw-monitoring/backups:/backup \
+    alpine tar -czf "/backup/openclaw-data-$(date +%F).tar.gz" -C /source . 2>> "$LOG"
 
-# Force-update to pinned image (catches config drift)
-docker service update --force --image openclaw/openclaw:2026.2.15 srv-captain--openclaw >> "$LOG" 2>&1
+  # Security audit (before force-update, while container is stable)
+  CID=$(OC_CONTAINER)
+  if [ -n "$CID" ]; then
+    docker exec "$CID" openclaw security audit --deep --fix >> "$LOG" 2>&1
+  else
+    echo "WARNING: Container not running, skipping pre-update audit" >> "$LOG"
+  fi
 
-# Wait for new container to be running after force-update
-echo "Waiting for new container to stabilize..." >> "$LOG"
-sleep 30
-RETRIES=0
-while [ -z "$(OC_CONTAINER)" ] && [ $RETRIES -lt 12 ]; do
-  sleep 5
-  RETRIES=$((RETRIES + 1))
-done
+  # Force-update to pinned image (catches config drift)
+  docker service update --force --image openclaw/openclaw:2026.2.15 srv-captain--openclaw >> "$LOG" 2>&1
 
-if [ -z "$(OC_CONTAINER)" ]; then
-  echo "ERROR: Container did not stabilize after 90s" | tee -a "$LOG"
-  # Continue to cleanup even on failure
-else
-  # Health check (against the new container)
-  docker exec $(OC_CONTAINER) openclaw doctor >> "$LOG" 2>&1
-fi
+  # Wait for new container to be running after force-update
+  echo "Waiting for new container to stabilize..." >> "$LOG"
+  sleep 30
+  RETRIES=0
+  while [ -z "$(OC_CONTAINER)" ] && [ $RETRIES -lt 12 ]; do
+    sleep 5
+    RETRIES=$((RETRIES + 1))
+  done
 
-# Prune old backups (keep 14 days)
-find /opt/openclaw-monitoring/backups -name "*.tar.gz" -mtime +14 -delete
+  if [ -z "$(OC_CONTAINER)" ]; then
+    echo "ERROR: Container did not stabilize after 90s" | tee -a "$LOG"
+    # Continue to cleanup even on failure
+  else
+    # Health check (against the new container)
+    docker exec "$(OC_CONTAINER)" openclaw doctor >> "$LOG" 2>&1
+  fi
 
-# Prune old logs (keep 30 days)
-find /opt/openclaw-monitoring/logs -name "*.log" -mtime +30 -delete
+  # Prune old backups (keep 14 days)
+  find /opt/openclaw-monitoring/backups -name "*.tar.gz" -mtime +14 -delete
 
-echo "=== Maintenance Complete ===" | tee -a "$LOG"
+  # Prune old logs (keep 30 days)
+  find /opt/openclaw-monitoring/logs -name "*.log" -mtime +30 -delete
+
+  echo "=== Maintenance Complete ===" | tee -a "$LOG"
+
+) 200>/opt/openclaw-monitoring/.maintenance.lock
 ```
 
 **Password Rotation Script** (`rotate-password.sh`):
@@ -561,18 +610,33 @@ echo "=== Maintenance Complete ===" | tee -a "$LOG"
 #!/bin/bash
 set -euo pipefail
 LOG="/opt/openclaw-monitoring/logs/password-rotation-$(date +%F).log"
+PASS_FILE="/opt/openclaw-monitoring/.gateway-password"
 OC_CONTAINER() { docker ps -q -f "name=srv-captain--openclaw\."; }
 
-echo "=== Password Rotation - $(date) ===" | tee -a "$LOG"
+(
+  flock -n 200 || { echo "Another rotation is already running"; exit 1; }
 
-NEW_PASSWORD=$(openssl rand -hex 32)
-docker exec $(OC_CONTAINER) \
-  openclaw config set gateway.password "$NEW_PASSWORD" >> "$LOG" 2>&1
+  echo "=== Password Rotation - $(date) ===" | tee -a "$LOG"
 
-docker service update --force srv-captain--openclaw >> "$LOG" 2>&1
+  # Generate new password to file (never as a CLI argument)
+  openssl rand -hex 32 > "${PASS_FILE}.new"
+  chmod 600 "${PASS_FILE}.new"
 
-echo "Password rotated successfully. Update any clients with the new password." | tee -a "$LOG"
-echo "=== Rotation Complete ===" | tee -a "$LOG"
+  # Copy into container and set from file to avoid process-table leak
+  CONTAINER_ID=$(OC_CONTAINER)
+  docker cp "${PASS_FILE}.new" "${CONTAINER_ID}:/tmp/.gw-pass"
+  docker exec "$CONTAINER_ID" \
+    sh -c 'openclaw config set gateway.password "$(cat /tmp/.gw-pass)" && rm -f /tmp/.gw-pass' >> "$LOG" 2>&1
+
+  # Persist password file on host (rotate backup)
+  mv "${PASS_FILE}.new" "$PASS_FILE"
+
+  docker service update --force srv-captain--openclaw >> "$LOG" 2>&1
+
+  echo "Password rotated. New password saved to $PASS_FILE" | tee -a "$LOG"
+  echo "=== Rotation Complete ===" | tee -a "$LOG"
+
+) 200>/opt/openclaw-monitoring/.rotate-password.lock
 ```
 
 **Cron Schedule** (add to `nyc` node):
