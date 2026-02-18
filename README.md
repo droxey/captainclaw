@@ -5,7 +5,7 @@ Same security model as the Swarm guide — socket proxy, egress whitelist, sandb
 
 ## Key Information
 
-- **Target**: 1 Ubuntu 24.04 server (4+ vCPU, 8+ GB RAM, 80+ GB SSD)
+- **Target**: 1 Ubuntu 24.04 KVM VPS (4 vCPU, 8 GB RAM, 4 GB swap, 150 GB SSD)
 - **OpenClaw Version**: `openclaw/openclaw:2026.2.15` (pinned)
 - **Threat Model**: Prompt injection → arbitrary tool execution → host/container escape
 - **Orchestration**: Docker Compose v2 (no Swarm, no CapRover)
@@ -73,6 +73,49 @@ curl -fsSL https://get.docker.com | sh
 # Verify Compose v2 is available
 docker compose version
 ```
+
+#### Docker Daemon Tuning (8 GB KVM)
+
+Configure Docker for a memory-constrained KVM VPS: rotate container logs to prevent disk fill, enable live-restore so containers survive daemon restarts, and set a sane default for sandbox containers.
+
+```bash
+mkdir -p /etc/docker
+cat > /etc/docker/daemon.json << 'EOF'
+{
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "10m",
+    "max-file": "3"
+  },
+  "live-restore": true,
+  "default-ulimits": {
+    "nofile": { "Name": "nofile", "Soft": 65536, "Hard": 65536 }
+  }
+}
+EOF
+
+systemctl restart docker
+```
+
+#### System Tuning
+
+```bash
+cat >> /etc/sysctl.d/99-openclaw.conf << 'EOF'
+# Prefer RAM over swap — only swap under real pressure (8 GB box with 4 GB swap)
+vm.swappiness = 10
+
+# Increase inotify limits for Docker overlay mounts and file watchers
+fs.inotify.max_user_watches = 524288
+fs.inotify.max_user_instances = 512
+
+# Allow more concurrent connections (reverse proxy + agent tool calls)
+net.core.somaxconn = 1024
+EOF
+
+sysctl --system
+```
+
+> **Why `vm.swappiness=10`?** On an 8 GB box running a latency-sensitive agent runtime, swapping degrades response times. Setting this low tells the kernel to prefer reclaiming page cache over swapping anonymous pages. The 4 GB swap still acts as a safety net if memory spikes during tool execution bursts.
 
 ### Step 2: Configure Firewall
 
@@ -152,6 +195,12 @@ http_access deny all
 via off
 forwarded_for delete
 httpd_suppress_version_string on
+
+# Memory tuning — keep Squid lean on an 8 GB host (container limit: 128 MB)
+cache_mem 32 MB
+maximum_object_size_in_memory 256 KB
+# Disable disk cache — this proxy only tunnels CONNECT requests to LLM APIs
+cache deny all
 EOF
 ```
 
@@ -198,8 +247,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.5"
-          memory: 512M
+          cpus: "0.25"
+          memory: 128M
     restart: unless-stopped
 
   openclaw:
@@ -230,7 +279,9 @@ services:
       resources:
         limits:
           cpus: "2.0"
-          memory: 6G
+          memory: 4G
+        reservations:
+          memory: 2G
     restart: unless-stopped
 
   openclaw-egress:
@@ -248,8 +299,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.5"
-          memory: 512M
+          cpus: "0.25"
+          memory: 128M
     restart: unless-stopped
 
 networks:
@@ -363,6 +414,11 @@ openclaw config set agents.defaults.sandbox.scope "agent"
 openclaw config set agents.defaults.sandbox.workspaceAccess "none"
 openclaw config set agents.defaults.sandbox.docker.network "none"
 openclaw config set agents.defaults.sandbox.docker.capDrop '["ALL"]'
+
+# ── Sandbox Resource Caps (prevents tool execution from OOMing the host) ──
+openclaw config set agents.defaults.sandbox.docker.memoryLimit "512m"
+openclaw config set agents.defaults.sandbox.docker.cpuLimit "0.5"
+openclaw config set agents.defaults.sandbox.docker.pidsLimit 256
 
 # ── Tool Denials ─────────────────────────────────────────────────────
 openclaw config set agents.defaults.tools.deny '["process", "browser", "nodes", "gateway", "sessions_spawn", "sessions_send", "elevated", "host_exec", "docker", "camera", "canvas", "cron"]'
@@ -590,8 +646,9 @@ docker inspect openclaw --format '{{json .State.Health}}'
 docker inspect openclaw-docker-proxy --format '{{json .State.Health}}'
 docker inspect openclaw-egress --format '{{json .State.Health}}'
 
-# ── Resource Limits ──────────────────────────────────────────────────
+# ── Resource Limits (8 GB budget: 4G openclaw + 128M proxy + 128M squid = 4.25G) ──
 docker stats --no-stream
+# Remaining ~3.75 GB covers: OS (~1G), Docker daemon (~300M), sandbox containers, reverse proxy
 
 # ── Network Connectivity ─────────────────────────────────────────────
 # Egress proxy — whitelisted domains (should succeed)
@@ -754,6 +811,8 @@ Local backups on the same box are not disaster recovery. Push encrypted backups 
 | Channel not connecting | `docker exec openclaw openclaw doctor` | Check channel token, verify `dmPolicy`, check pairing status |
 | Container keeps restarting | `docker compose logs <service> --tail 100` | Check resource limits (`docker stats`), verify config files are readable |
 | Squid blocks legitimate traffic | `docker logs openclaw-egress` | Check `squid.conf` ACLs, verify `localnet` matches `openclaw-net` subnet |
+| Container OOM-killed | `dmesg \| grep -i oom`, `docker inspect <container> --format '{{.State.OOMKilled}}'` | Check `docker stats` — on 8 GB host, total container limits must stay under ~4.5G. Reduce `maxTokens` or concurrent sandbox count if openclaw peaks |
+| High swap usage | `free -h`, `vmstat 1 5` | If swap > 1 GB consistently, reduce `agents.defaults.sandbox.docker.memoryLimit` or lower openclaw memory limit to 3G |
 
 ### Step 13: Disaster Recovery
 
