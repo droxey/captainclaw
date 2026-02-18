@@ -61,6 +61,3 @@ All setups assume hardened VPS/Tailscale stack, allowlist Telegram, soul.md memo
 
 - Self-Healing Home Server: monitors logs → auto-spawns optimized bash/cron/GitHub tools → keeps your infra alive while you sleep.
 
----
-
-Save this as `USECASES.md` in your ClawHub or notes vault. All verified from low-like X threads + ClawHub drops. Add your own? Drop the skill name and I'll pull the exact YAML.
