@@ -1,0 +1,53 @@
+---
+# OpenClaw Hardened Single-Server Deployment
+#
+# Usage:
+#   Full deploy:  ansible-playbook playbook.yml --ask-vault-pass
+#   Specific role: ansible-playbook playbook.yml --ask-vault-pass --tags harden
+#   Dry run:      ansible-playbook playbook.yml --ask-vault-pass --check --diff
+#
+# Tags: base, config, deploy, harden, integrate, proxy, verify, maintenance, monitoring
+
+- name: Deploy OpenClaw (hardened single-server)
+  hosts: openclaw
+  become: true
+
+  pre_tasks:
+    - name: Generate secrets that were left empty
+      tags: [always]
+      block:
+        - name: Generate LiteLLM master key
+          ansible.builtin.set_fact:
+            litellm_master_key: "{{ lookup('ansible.builtin.password', '/dev/null chars=hexdigits length=64') }}"
+          when: litellm_master_key | default('') | length == 0
+
+        - name: Generate gateway token
+          ansible.builtin.set_fact:
+            gateway_token: "{{ lookup('ansible.builtin.password', '/dev/null chars=hexdigits length=64') }}"
+          when: gateway_token | default('') | length == 0
+
+        - name: Generate backup encryption key
+          ansible.builtin.set_fact:
+            backup_encryption_key: "{{ lookup('ansible.builtin.password', '/dev/null chars=hexdigits length=64') }}"
+          when: backup_encryption_key | default('') | length == 0
+
+  roles:
+    - role: base
+      tags: [base]
+    - role: openclaw-config
+      tags: [config]
+    - role: openclaw-deploy
+      tags: [deploy]
+    - role: openclaw-harden
+      tags: [harden]
+    - role: openclaw-integrate
+      tags: [integrate]
+    - role: reverse-proxy
+      tags: [proxy]
+    - role: verify
+      tags: [verify]
+    - role: maintenance
+      tags: [maintenance]
+    - role: monitoring
+      tags: [monitoring]
+      when: monitoring_enabled | bool

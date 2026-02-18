@@ -1,0 +1,71 @@
+---
+# Steps 6-8: API keys, model config, Telegram channel, memory/RAG
+
+# ── Step 6: API Keys and Model Configuration ─────────────────────────
+- name: Configure LiteLLM as model proxy
+  ansible.builtin.command: >
+    docker exec openclaw openclaw config set agents.defaults.apiBase
+    "http://openclaw-litellm:4000"
+  changed_when: false
+
+- name: Set default model
+  ansible.builtin.command: >
+    docker exec openclaw openclaw config set agents.defaults.model
+    "{{ openclaw_default_model }}"
+  changed_when: false
+
+- name: Write Voyage API key into container .env
+  ansible.builtin.command: >
+    docker exec openclaw sh -c
+    'echo "VOYAGE_API_KEY={{ voyage_api_key }}" > /root/.openclaw/.env && chmod 600 /root/.openclaw/.env'
+  changed_when: false
+  no_log: true
+
+# ── Step 7: Channel Integration (Telegram) ───────────────────────────
+- name: Configure Telegram channel
+  when: telegram_enabled | bool
+  block:
+    - name: Set Telegram bot token
+      ansible.builtin.command: >
+        docker exec openclaw openclaw config set channels.telegram.token
+        "{{ telegram_bot_token }}"
+      changed_when: false
+      no_log: true
+
+    - name: Disable Telegram streaming (known crash in 2026.2.17)
+      ansible.builtin.command: >
+        docker exec openclaw openclaw config set channels.telegram.streamMode "off"
+      changed_when: false
+
+# ── Step 8: Memory and RAG Configuration ─────────────────────────────
+- name: Configure memory provider
+  ansible.builtin.command: >
+    docker exec openclaw openclaw config set memory.provider "{{ memory_provider }}"
+  changed_when: false
+
+- name: Configure memory model
+  ansible.builtin.command: >
+    docker exec openclaw openclaw config set memory.voyage.model "{{ memory_model }}"
+  changed_when: false
+
+- name: Build memory index
+  ansible.builtin.command: docker exec openclaw openclaw memory index
+  register: memory_index
+  changed_when: false
+  failed_when: false
+
+- name: Verify memory index
+  ansible.builtin.command: docker exec openclaw openclaw memory index --verify
+  register: memory_verify
+  changed_when: false
+  failed_when: false
+
+- name: Show memory index status
+  ansible.builtin.debug:
+    msg: "Memory index: {{ 'OK' if memory_verify.rc == 0 else 'FAILED — check Voyage API key and Squid whitelist' }}"
+
+# ── Restart to apply all integration config ───────────────────────────
+- name: Restart OpenClaw to apply integration config
+  ansible.builtin.command: docker compose restart openclaw
+  args:
+    chdir: "{{ openclaw_base_dir }}"

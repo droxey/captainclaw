@@ -1,0 +1,16 @@
+# Prefer RAM over swap — only swap under real pressure
+vm.swappiness = {{ swappiness }}
+
+# Increase inotify limits for Docker overlay mounts and file watchers
+fs.inotify.max_user_watches = {{ inotify_max_watches }}
+fs.inotify.max_user_instances = {{ inotify_max_instances }}
+
+# Allow more concurrent connections (reverse proxy + agent tool calls)
+net.core.somaxconn = {{ somaxconn }}
+{% if disable_ipv6 | bool %}
+
+# Disable IPv6 — reduces attack surface if not needed
+net.ipv6.conf.all.disable_ipv6 = 1
+net.ipv6.conf.default.disable_ipv6 = 1
+net.ipv6.conf.lo.disable_ipv6 = 1
+{% endif %}

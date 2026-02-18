@@ -1,0 +1,54 @@
+---
+# Step 4: Deploy containers and tighten Squid ACL
+
+- name: Pull container images
+  community.docker.docker_image:
+    name: "{{ item }}"
+    source: pull
+  loop:
+    - "openclaw/openclaw:{{ openclaw_version }}"
+    - "tecnativa/docker-socket-proxy:{{ docker_proxy_version }}"
+    - "ubuntu/squid:{{ squid_version }}"
+    - "ghcr.io/berriai/litellm:{{ litellm_version }}"
+    - "redis/redis-stack-server:{{ redis_version }}"
+
+- name: Start OpenClaw stack
+  community.docker.docker_compose_v2:
+    project_src: "{{ openclaw_base_dir }}"
+    state: present
+  register: compose_result
+
+- name: Wait for all containers to become healthy
+  ansible.builtin.command: docker inspect {{ item }} --format '{{ '{{' }}.State.Health.Status{{ '}}' }}'
+  register: health_check
+  until: health_check.stdout == 'healthy'
+  retries: 20
+  delay: 5
+  changed_when: false
+  loop:
+    - openclaw-docker-proxy
+    - openclaw-egress
+    - openclaw-redis
+    - openclaw-litellm
+    - openclaw
+
+# ── Tighten Squid ACL to actual bridge subnet ────────────────────────
+- name: Get openclaw-net bridge subnet
+  ansible.builtin.command: >
+    docker network inspect openclaw_openclaw-net
+    --format '{{ '{{' }}range .IPAM.Config{{ '}}' }}{{ '{{' }}.Subnet{{ '}}' }}{{ '{{' }}end{{ '}}' }}'
+  register: bridge_subnet
+  changed_when: false
+
+- name: Tighten Squid localnet ACL to actual subnet
+  ansible.builtin.lineinfile:
+    path: "{{ openclaw_base_dir }}/config/squid.conf"
+    regexp: "^acl localnet src"
+    line: "acl localnet src {{ bridge_subnet.stdout }}"
+  register: squid_acl_tightened
+
+- name: Restart Squid to apply tightened ACL
+  ansible.builtin.command: docker compose restart openclaw-egress
+  args:
+    chdir: "{{ openclaw_base_dir }}"
+  when: squid_acl_tightened is changed

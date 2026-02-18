@@ -1,0 +1,45 @@
+model_list:
+{% for model in litellm_models %}
+  - model_name: "{{ model.name }}"
+    litellm_params:
+      model: "{{ model.model }}"
+      api_key: "os.environ/{{ model.key_env }}"
+{% if model.max_budget is defined %}
+      max_budget: {{ model.max_budget }}
+{% endif %}
+{% if model.rpm is defined %}
+      rpm: {{ model.rpm }}
+{% endif %}
+{% endfor %}
+
+  # Embedding model (for semantic cache)
+  - model_name: "voyage-cache-embed"
+    litellm_params:
+      model: "voyage/voyage-3-lite"
+      api_key: "os.environ/VOYAGE_API_KEY"
+
+general_settings:
+  master_key: "os.environ/LITELLM_MASTER_KEY"
+  alerting: ["log"]
+
+litellm_settings:
+  cache: true
+  cache_params:
+    type: "redis-semantic"
+    host: "openclaw-redis"
+    port: 6379
+    ttl: {{ litellm_cache_ttl }}
+    similarity_threshold: {{ litellm_similarity_threshold }}
+    redis_semantic_cache_embedding_model: "voyage-cache-embed"
+    supported_call_types:
+      - "acompletion"
+      - "atext_completion"
+  service_callbacks: ["prometheus"]
+  json_logs: true
+  turn_off_message_logging: true
+
+router_settings:
+  num_retries: 2
+  retry_after: 5
+  routing_strategy: "usage-based-routing-v2"
+  enable_pre_call_checks: true

@@ -1,0 +1,89 @@
+---
+# Step 9: Reverse proxy setup (Caddy, Cloudflare Tunnel, or Tailscale)
+
+# ── Option A: Caddy ───────────────────────────────────────────────────
+- name: Deploy Caddy reverse proxy
+  when: reverse_proxy == 'caddy'
+  block:
+    - name: Deploy Caddyfile
+      ansible.builtin.template:
+        src: Caddyfile.j2
+        dest: "{{ openclaw_base_dir }}/Caddyfile"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Deploy Caddy compose override
+      ansible.builtin.template:
+        src: compose.caddy.yml.j2
+        dest: "{{ openclaw_base_dir }}/compose.caddy.yml"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Pull Caddy image
+      community.docker.docker_image:
+        name: "caddy:{{ caddy_version }}"
+        source: pull
+
+    - name: Start stack with Caddy overlay
+      ansible.builtin.command: >
+        docker compose -f docker-compose.yml -f compose.caddy.yml up -d
+      args:
+        chdir: "{{ openclaw_base_dir }}"
+
+# ── Option B: Cloudflare Tunnel ───────────────────────────────────────
+- name: Deploy Cloudflare Tunnel
+  when: reverse_proxy == 'tunnel'
+  block:
+    - name: Deploy Tunnel compose override
+      ansible.builtin.template:
+        src: compose.tunnel.yml.j2
+        dest: "{{ openclaw_base_dir }}/compose.tunnel.yml"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Pull cloudflared image
+      community.docker.docker_image:
+        name: "cloudflare/cloudflared:{{ cloudflared_version }}"
+        source: pull
+
+    - name: Start stack with Tunnel overlay
+      ansible.builtin.command: >
+        docker compose -f docker-compose.yml -f compose.tunnel.yml up -d
+      args:
+        chdir: "{{ openclaw_base_dir }}"
+
+    - name: Remind operator to configure tunnel route in Cloudflare dashboard
+      ansible.builtin.debug:
+        msg: >
+          Configure tunnel route in Cloudflare dashboard:
+          Route {{ domain }} → http://openclaw:18789
+
+# ── Option C: Tailscale Serve ─────────────────────────────────────────
+- name: Deploy Tailscale Serve
+  when: reverse_proxy == 'tailscale'
+  block:
+    - name: Enable Tailscale Serve for OpenClaw gateway
+      ansible.builtin.command: tailscale serve --bg https+insecure://localhost:18789
+      changed_when: false
+
+    - name: Configure gateway for Tailscale serve mode
+      ansible.builtin.command: >
+        docker exec openclaw openclaw config set gateway.tailscale.mode "serve"
+      changed_when: false
+
+    - name: Restart OpenClaw for Tailscale config
+      ansible.builtin.command: docker compose restart openclaw
+      args:
+        chdir: "{{ openclaw_base_dir }}"
+
+    - name: Show Tailscale serve status
+      ansible.builtin.command: tailscale serve status
+      register: ts_status
+      changed_when: false
+
+    - name: Display Tailscale endpoint
+      ansible.builtin.debug:
+        var: ts_status.stdout_lines

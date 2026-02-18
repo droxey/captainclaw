@@ -1,0 +1,88 @@
+---
+# Step 10: Post-deploy verification
+
+- name: Run security audit
+  ansible.builtin.command: docker exec openclaw openclaw security audit --deep
+  register: audit_result
+  changed_when: false
+
+- name: Run sandbox explain
+  ansible.builtin.command: docker exec openclaw openclaw sandbox explain
+  register: sandbox_result
+  changed_when: false
+
+- name: Check all container health status
+  ansible.builtin.command: docker inspect {{ item }} --format '{{ '{{' }}if .State.Health{{ '}}' }}{{ '{{' }}.State.Health.Status{{ '}}' }}{{ '{{' }}else{{ '}}' }}running{{ '{{' }}end{{ '}}' }}'
+  register: container_health
+  changed_when: false
+  loop:
+    - openclaw
+    - openclaw-docker-proxy
+    - openclaw-egress
+    - openclaw-litellm
+    - openclaw-redis
+
+- name: Display container health
+  ansible.builtin.debug:
+    msg: "{{ item.item }}: {{ item.stdout }}"
+  loop: "{{ container_health.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Verify LiteLLM health
+  ansible.builtin.command: docker exec openclaw wget -qO- http://openclaw-litellm:4000/health/liveliness
+  register: litellm_health
+  changed_when: false
+  failed_when: false
+
+- name: Verify Redis connectivity
+  ansible.builtin.command: docker exec openclaw-redis redis-cli ping
+  register: redis_ping
+  changed_when: false
+
+- name: Verify egress proxy — whitelisted domain
+  ansible.builtin.command: >
+    docker exec openclaw
+    curl -sf -o /dev/null -w '%{http_code}'
+    -x http://openclaw-egress:3128 https://api.anthropic.com
+  register: egress_allowed
+  changed_when: false
+  failed_when: false
+
+- name: Verify egress proxy — blocked domain
+  ansible.builtin.command: >
+    docker exec openclaw
+    curl -sf -o /dev/null -w '%{http_code}'
+    -x http://openclaw-egress:3128 https://example.com
+  register: egress_blocked
+  changed_when: false
+  failed_when: false
+
+- name: Spot-check security config values
+  ansible.builtin.command: "docker exec openclaw openclaw config get {{ item.key }}"
+  register: config_checks
+  changed_when: false
+  loop:
+    - { key: 'gateway.auth.mode', expected: 'token' }
+    - { key: 'discovery.mdns.mode', expected: 'off' }
+    - { key: 'gateway.nodes.browser.mode', expected: 'off' }
+    - { key: 'agents.defaults.model.heartbeat', expected: "{{ openclaw_heartbeat_model }}" }
+    - { key: 'agents.defaults.maxTokens', expected: "{{ openclaw_max_tokens }}" }
+    - { key: 'agents.defaults.sandbox.docker.idleHours', expected: "{{ sandbox_idle_hours }}" }
+
+- name: Show resource usage
+  ansible.builtin.command: docker stats --no-stream --format "table {{ '{{' }}.Name{{ '}}' }}\t{{ '{{' }}.CPUPerc{{ '}}' }}\t{{ '{{' }}.MemUsage{{ '}}' }}"
+  register: docker_stats
+  changed_when: false
+
+- name: Display verification summary
+  ansible.builtin.debug:
+    msg: |
+      ═══ Verification Summary ═══
+      Security audit:     {{ 'PASS' if audit_result.rc == 0 else 'CHECK OUTPUT' }}
+      LiteLLM:            {{ litellm_health.stdout | default('UNREACHABLE') }}
+      Redis:              {{ redis_ping.stdout }}
+      Egress (allowed):   {{ egress_allowed.stdout | default('FAILED') }}
+      Egress (blocked):   {{ egress_blocked.stdout | default('BLOCKED') }} (expected: BLOCKED/403)
+
+      {{ docker_stats.stdout }}

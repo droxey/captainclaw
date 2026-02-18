@@ -1,0 +1,47 @@
+#!/bin/bash
+set -euo pipefail
+LOG="{{ openclaw_base_dir }}/monitoring/logs/backup-$(date +%F-%H%M).log"
+
+(
+  flock -n 200 || { echo "Another backup is already running"; exit 1; }
+
+  echo "=== OpenClaw Backup — $(date) ===" | tee -a "$LOG"
+
+  # Backup data volume via a temporary container
+  docker run --rm \
+    -v openclaw_openclaw-data:/source:ro \
+    -v {{ openclaw_base_dir }}/monitoring/backups:/backup \
+    alpine:3.21 tar -czf "/backup/openclaw-data-$(date +%F).tar.gz" -C /source . 2>> "$LOG"
+
+  # Backup config files
+  tar -czf "{{ openclaw_base_dir }}/monitoring/backups/openclaw-config-$(date +%F).tar.gz" \
+    -C {{ openclaw_base_dir }} config/ docker-compose.yml .env Caddyfile 2>> "$LOG" || true
+
+  # Encrypt backups at rest
+  ENCRYPTION_KEY_FILE="{{ openclaw_base_dir }}/monitoring/.backup-encryption-key"
+  if [ -f "$ENCRYPTION_KEY_FILE" ]; then
+    for backup in {{ openclaw_base_dir }}/monitoring/backups/*-"$(date +%F)".tar.gz; do
+      [ -f "$backup" ] || continue
+      openssl enc -aes-256-cbc -salt -pbkdf2 \
+        -in "$backup" -out "${backup}.enc" \
+        -pass "file:${ENCRYPTION_KEY_FILE}" 2>> "$LOG"
+      rm -f "$backup"
+      echo "Encrypted: $(basename "$backup")" >> "$LOG"
+    done
+  else
+    echo "WARNING: No encryption key — backups stored unencrypted" >> "$LOG"
+  fi
+
+  # Security audit (report only — never auto-fix in unattended cron)
+  docker exec openclaw openclaw security audit --deep >> "$LOG" 2>&1
+
+  # Health check
+  docker exec openclaw openclaw doctor >> "$LOG" 2>&1
+
+  # Prune old backups
+  find {{ openclaw_base_dir }}/monitoring/backups -name "*.tar.gz*" -mtime +{{ backup_retention_days }} -delete
+  find {{ openclaw_base_dir }}/monitoring/logs -name "*.log" -mtime +{{ log_retention_days }} -delete
+
+  echo "=== Backup Complete ===" | tee -a "$LOG"
+
+) 200>{{ openclaw_base_dir }}/monitoring/.backup.lock
