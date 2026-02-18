@@ -70,9 +70,51 @@ Three bridge networks enforce least-privilege communication. `openclaw-net` is *
 - Domain pointed at this server via Cloudflare (Proxied, Full Strict SSL)
 - SSH access on a non-default port (this guide uses `9922`)
 
+#### SSH Hardening (Do This First)
+
+A VPS gets brute-forced within hours of provisioning. Create a non-root sudo user with SSH key access, then lock down SSH before installing anything else.
+
+```bash
+# Create a non-root user with sudo privileges
+adduser deploy
+usermod -aG sudo deploy
+
+# Copy your SSH public key to the new user
+mkdir -p /home/deploy/.ssh
+cp ~/.ssh/authorized_keys /home/deploy/.ssh/authorized_keys
+chown -R deploy:deploy /home/deploy/.ssh
+chmod 700 /home/deploy/.ssh
+chmod 600 /home/deploy/.ssh/authorized_keys
+```
+
+Harden the SSH daemon — disable password auth, disable root login, and move to a non-default port:
+
+```bash
+cat > /etc/ssh/sshd_config.d/99-hardening.conf << 'EOF'
+Port 9922
+PermitRootLogin no
+PasswordAuthentication no
+PubkeyAuthentication yes
+MaxAuthTries 3
+ClientAliveInterval 300
+ClientAliveCountMax 2
+EOF
+
+# Validate config before reloading (a bad sshd_config locks you out)
+sshd -t && systemctl reload ssh
+```
+
+> **Warning**: Before reloading SSH, verify you can log in as `deploy` on port 9922 from a **second terminal**. A misconfigured `sshd_config` on a remote VPS means permanent lockout.
+
+From this point forward, all commands run as `deploy` with `sudo` where needed.
+
 ```bash
 # Install Docker (official method)
 curl -fsSL https://get.docker.com | sh
+
+# Add deploy user to docker group (avoids sudo for docker commands)
+sudo usermod -aG docker deploy
+newgrp docker
 
 # Verify Compose v2 is available
 docker compose version
@@ -124,7 +166,7 @@ sysctl --system
 ### Step 2: Configure Firewall
 
 ```bash
-sudo apt update && sudo apt install ufw -y
+sudo apt update && sudo apt install ufw fail2ban -y
 
 ADMIN_IP="YOUR_STATIC_IP"
 
@@ -134,6 +176,26 @@ ufw default allow outgoing
 # SSH on non-default port — rate-limited to admin IP only
 ufw limit from $ADMIN_IP to any port 9922 proto tcp
 ```
+
+#### fail2ban (Brute-Force Protection)
+
+fail2ban watches auth logs and temporarily bans IPs with repeated failed login attempts. Essential on any public-facing VPS.
+
+```bash
+cat > /etc/fail2ban/jail.local << 'EOF'
+[sshd]
+enabled = true
+port = 9922
+maxretry = 3
+bantime = 3600
+findtime = 600
+EOF
+
+sudo systemctl enable fail2ban
+sudo systemctl start fail2ban
+```
+
+> **Why fail2ban alongside UFW?** UFW rate-limits connections per IP, but fail2ban reads actual auth failures from logs and bans attackers after 3 failed attempts. They complement each other — UFW handles connection floods, fail2ban handles credential-stuffing bots.
 
 #### Cloudflare Ingress
 
@@ -149,6 +211,45 @@ for ip in $(curl -s https://www.cloudflare.com/ips-v6); do
 done
 
 ufw --force enable
+```
+
+#### Optional: Tailscale Zero-Trust Access
+
+Tailscale creates a WireGuard mesh network between your devices. With Tailscale, you can drop the public SSH port entirely — SSH becomes reachable only from your authenticated devices via the CGNAT range (`100.64.0.0/10`).
+
+```bash
+# Install Tailscale
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up
+
+# Replace the admin IP SSH rule with Tailscale-only access
+sudo ufw allow from 100.64.0.0/10 to any port 9922 proto tcp
+sudo ufw delete limit from $ADMIN_IP to any port 9922 proto tcp
+
+# Verify: only Tailscale and Cloudflare rules remain
+sudo ufw status numbered
+```
+
+> **Security trade-off**: With Tailscale, the SSH port is invisible to the internet — `ss -tulnp` still shows it listening, but no public traffic can reach it. This eliminates the need for fail2ban on SSH (though keeping it as defense-in-depth doesn't hurt). If you also expose the Web UI, allow port 80/443 from Tailscale instead of Cloudflare for a fully private deployment.
+
+#### Optional: Disable IPv6
+
+If your deployment does not need IPv6, disabling it reduces the attack surface and simplifies firewall rules.
+
+```bash
+cat >> /etc/sysctl.d/99-openclaw.conf << 'EOF'
+
+# Disable IPv6 — reduces attack surface if not needed
+net.ipv6.conf.all.disable_ipv6 = 1
+net.ipv6.conf.default.disable_ipv6 = 1
+net.ipv6.conf.lo.disable_ipv6 = 1
+EOF
+
+sudo sysctl --system
+
+# Disable IPv6 in UFW
+sudo sed -i 's/IPV6=yes/IPV6=no/' /etc/default/ufw
+sudo ufw reload
 ```
 
 ### Step 3: Create Configuration Files
@@ -431,6 +532,14 @@ docker compose restart openclaw-egress
 
 ### Step 5: Gateway and Sandbox Hardening
 
+> **Back up config before editing**: OpenClaw updates can produce "config from newer version" errors if the config schema changes. Before applying hardening, snapshot the current config so you can roll back:
+>
+> ```bash
+> docker exec openclaw cp /root/.openclaw/config.json /root/.openclaw/config.json.bak
+> ```
+>
+> If a future update breaks config parsing, restore with `docker exec openclaw cp /root/.openclaw/config.json.bak /root/.openclaw/config.json` and restart.
+
 Generate the gateway auth token, then apply all hardening config inside the container:
 
 ```bash
@@ -603,6 +712,10 @@ docker exec -it openclaw sh
 
 openclaw config set channels.telegram.token "YOUR_TELEGRAM_BOT_TOKEN"
 
+# Disable streaming — fixes a known crash in 2026.2.15 where streamed
+# responses cause the Telegram provider to drop the long-poll connection.
+openclaw config set channels.telegram.streamMode "off"
+
 # Verify channel connectivity
 openclaw doctor
 exit
@@ -611,6 +724,8 @@ exit
 ```bash
 docker compose restart openclaw
 ```
+
+> **Known issue (2026.2.15)**: Telegram streaming causes intermittent gateway crashes due to a race condition in the long-poll handler. Setting `streamMode: "off"` disables chunked response streaming to Telegram — messages arrive as complete responses instead. This adds slight perceived latency but eliminates the crash. Monitor the [OpenClaw changelog](https://github.com/openclaw) for a fix before re-enabling.
 
 > **Tip**: After restart, send a DM to your bot on Telegram. OpenClaw's DM pairing (Step 5) will prompt you to pair the bot with your account before it responds to messages.
 
@@ -714,6 +829,31 @@ docker compose -f docker-compose.yml -f compose.tunnel.yml up -d
 Configure the tunnel in Cloudflare dashboard to route `openclaw.yourdomain.com` to `http://openclaw:18789`.
 
 > **Security note**: The tunnel token is loaded from `.env` via variable substitution — not hardcoded in the compose file. Pin the `cloudflared` image version; `latest` tags can introduce breaking changes.
+
+#### Option C: Tailscale Serve (Zero-Config, Private Access Only)
+
+If you installed Tailscale in Step 2 and only need access from your own devices (no public URL), Tailscale Serve provides automatic HTTPS with no reverse proxy, no open ports, and no Cloudflare dependency.
+
+```bash
+# Serve the gateway on your Tailscale hostname with auto-TLS
+sudo tailscale serve --bg https+insecure://localhost:18789
+
+# Verify — your gateway is now reachable at https://<hostname>.<tailnet>.ts.net
+tailscale serve status
+```
+
+To bind the gateway directly to the Tailscale interface (skipping the Docker bridge proxy entirely):
+
+```bash
+docker exec -it openclaw sh
+openclaw config set gateway.tailscale.mode "serve"
+exit
+docker compose restart openclaw
+```
+
+> **When to use this**: Tailscale Serve is the simplest option if the gateway only needs to be reachable from your devices — no DNS, no certificates, no reverse proxy to maintain. It does **not** work for public-facing deployments (bots, webhooks) because Tailscale hostnames are not publicly routable. For public access, use Caddy (Option A) or Cloudflare Tunnel (Option B).
+
+> **Security posture**: With Tailscale Serve, you can remove **all** Cloudflare ingress rules from UFW (Step 2). The only inbound port is Tailscale's WireGuard tunnel (UDP 41641), which UFW does not need to allow explicitly — Tailscale manages it via netfilter. The result is a VPS with zero public TCP ports.
 
 ### Step 10: Verification
 
@@ -904,11 +1044,13 @@ Local backups on the same box are not disaster recovery. Push encrypted backups 
 | Agents can't reach LLM APIs | `docker exec openclaw wget -qO- http://openclaw-litellm:4000/health/liveliness` | Verify LiteLLM is healthy, check `agents.defaults.apiBase` points to `http://openclaw-litellm:4000`, check `ANTHROPIC_API_KEY` in `/opt/openclaw/.env` |
 | LiteLLM can't reach providers | `docker exec openclaw-litellm curl -x http://openclaw-egress:3128 -I https://api.anthropic.com` | Check squid.conf whitelist, verify `HTTP_PROXY` env var, check `localnet` ACL subnet |
 | Memory index fails | `docker exec openclaw openclaw memory index --verify` | Verify Voyage AI key, check `.voyageai.com` in squid.conf whitelist |
+| Telegram crashes / drops messages | `docker compose logs openclaw --tail 100 \| grep -i telegram` | Set `channels.telegram.streamMode "off"` (Step 7). Known issue in 2026.2.15 — streaming causes long-poll race condition |
 | Channel not connecting | `docker exec openclaw openclaw doctor` | Check channel token, verify `dmPolicy`, check pairing status |
 | Container keeps restarting | `docker compose logs <service> --tail 100` | Check resource limits (`docker stats`), verify config files are readable |
 | Squid blocks legitimate traffic | `docker logs openclaw-egress` | Check `squid.conf` ACLs, verify `localnet` matches `openclaw-net` subnet |
 | Container OOM-killed | `dmesg \| grep -i oom`, `docker inspect <container> --format '{{.State.OOMKilled}}'` | Check `docker stats` — on 8 GB host, total container limits must stay under ~4.5G. Reduce `maxTokens` or concurrent sandbox count if openclaw peaks |
 | High swap usage | `free -h`, `vmstat 1 5` | If swap > 1 GB consistently, reduce `agents.defaults.sandbox.docker.memoryLimit` or lower openclaw memory limit to 3G |
+| Config error after update | `docker exec openclaw openclaw doctor --repair` | Restore from backup: `docker exec openclaw cp /root/.openclaw/config.json.bak /root/.openclaw/config.json` and restart. See Step 5 backup note |
 
 ### Step 13: High Availability and Disaster Recovery
 
