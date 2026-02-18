@@ -1,0 +1,100 @@
+#!/bin/bash
+set -euo pipefail
+
+LOG="{{ openclaw_base_dir }}/monitoring/logs/watchdog.log"
+ALERT_FILE="{{ openclaw_base_dir }}/monitoring/.last-alert"
+ALERT_COOLDOWN=1800
+
+CONTAINERS=("openclaw" "openclaw-docker-proxy" "openclaw-egress" "openclaw-litellm" "openclaw-redis")
+RESTART_THRESHOLD={{ watchdog_restart_threshold }}
+DISK_THRESHOLD={{ watchdog_disk_threshold }}
+MEMORY_THRESHOLD={{ watchdog_memory_threshold }}
+
+alert() {
+  local msg="$1"
+  local now
+  now=$(date +%s)
+
+  if [ -f "$ALERT_FILE" ]; then
+    local last_alert last_msg
+    last_alert=$(head -1 "$ALERT_FILE" 2>/dev/null || echo 0)
+    last_msg=$(tail -1 "$ALERT_FILE" 2>/dev/null || echo "")
+    if [ "$last_msg" = "$msg" ] && [ $((now - last_alert)) -lt $ALERT_COOLDOWN ]; then
+      return 0
+    fi
+  fi
+
+  echo "$now" > "$ALERT_FILE"
+  echo "$msg" >> "$ALERT_FILE"
+  echo "[ALERT $(date '+%F %T')] $msg" >> "$LOG"
+
+  # Uncomment ONE notification method:
+  # Option 1: Telegram
+  # TELEGRAM_BOT_TOKEN="YOUR_BOT_TOKEN"
+  # TELEGRAM_CHAT_ID="YOUR_CHAT_ID"
+  # curl -sf "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+  #   -d chat_id="$TELEGRAM_CHAT_ID" -d text="OpenClaw Alert: ${msg}" > /dev/null 2>&1
+
+  # Option 2: Ntfy
+  # curl -sf -d "$msg" "https://ntfy.sh/your-openclaw-alerts" > /dev/null 2>&1
+}
+
+# ── Container Health Checks ────────────────────────────────────────
+for ctr in "${CONTAINERS[@]}"; do
+  if ! docker inspect "$ctr" > /dev/null 2>&1; then
+    alert "$ctr: container not found"
+    continue
+  fi
+
+  status=$(docker inspect "$ctr" --format '{% raw %}{{.State.Status}}{% endraw %}')
+  if [ "$status" != "running" ]; then
+    alert "$ctr: status is '$status' (expected 'running')"
+    continue
+  fi
+
+  health=$(docker inspect "$ctr" --format '{% raw %}{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}{% endraw %}')
+  if [ "$health" = "unhealthy" ]; then
+    last_log=$(docker inspect "$ctr" --format '{% raw %}{{(index .State.Health.Log 0).Output}}{% endraw %}' 2>/dev/null | head -c 200)
+    alert "$ctr: UNHEALTHY — ${last_log:-no healthcheck output}"
+  fi
+
+  restarts=$(docker inspect "$ctr" --format '{% raw %}{{.RestartCount}}{% endraw %}')
+  if [ "$restarts" -gt "$RESTART_THRESHOLD" ]; then
+    alert "$ctr: restarted $restarts times (threshold: $RESTART_THRESHOLD)"
+  fi
+
+  oom=$(docker inspect "$ctr" --format '{% raw %}{{.State.OOMKilled}}{% endraw %}')
+  if [ "$oom" = "true" ]; then
+    alert "$ctr: OOM-killed — increase memory limit or reduce load"
+  fi
+done
+
+# ── Disk Usage ─────────────────────────────────────────────────────
+disk_pct=$(df {{ openclaw_base_dir }} --output=pcent | tail -1 | tr -d ' %')
+if [ "$disk_pct" -gt "$DISK_THRESHOLD" ]; then
+  alert "Disk usage at ${disk_pct}% (threshold: ${DISK_THRESHOLD}%)"
+fi
+
+# ── Memory Usage ───────────────────────────────────────────────────
+mem_pct=$(free | awk '/Mem:/ {printf "%.0f", ($3/$2)*100}')
+if [ "$mem_pct" -gt "$MEMORY_THRESHOLD" ]; then
+  alert "Memory usage at ${mem_pct}% (threshold: ${MEMORY_THRESHOLD}%)"
+fi
+
+# ── Swap Pressure ─────────────────────────────────────────────────
+swap_total=$(free -m | awk '/Swap:/ {print $2}')
+swap_used=$(free -m | awk '/Swap:/ {print $3}')
+if [ "$swap_total" -gt 0 ]; then
+  swap_pct=$((swap_used * 100 / swap_total))
+  if [ "$swap_pct" -gt 50 ]; then
+    alert "Swap usage at ${swap_pct}% (${swap_used}M/${swap_total}M) — host under memory pressure"
+  fi
+fi
+
+# ── Log rotation for watchdog itself ───────────────────────────────
+if [ -f "$LOG" ]; then
+  log_lines=$(wc -l < "$LOG")
+  if [ "$log_lines" -gt 10000 ]; then
+    tail -5000 "$LOG" > "${LOG}.tmp" && mv "${LOG}.tmp" "$LOG"
+  fi
+fi

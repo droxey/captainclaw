@@ -1,0 +1,15 @@
+{
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "{{ docker_log_max_size }}",
+    "max-file": "{{ docker_log_max_file }}"
+  },
+  "storage-driver": "overlay2",
+  "live-restore": true,
+  "default-ulimits": {
+    "nofile": { "Name": "nofile", "Soft": 65536, "Hard": 65536 }
+  },
+  "dns": {{ docker_dns | to_json }},
+  "max-concurrent-downloads": {{ docker_max_concurrent_downloads }},
+  "max-concurrent-uploads": {{ docker_max_concurrent_uploads }}
+}

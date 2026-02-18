@@ -1,0 +1,66 @@
+---
+# Step 13.2.1: Optional Prometheus + Grafana monitoring stack
+# Only runs when monitoring_enabled: true
+
+- name: Generate Grafana admin password if not set
+  ansible.builtin.set_fact:
+    grafana_admin_password: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits length=32') }}"
+  when: grafana_admin_password is not defined or grafana_admin_password | length == 0
+
+- name: Append Grafana password to .env
+  ansible.builtin.lineinfile:
+    path: "{{ openclaw_base_dir }}/.env"
+    regexp: "^GRAFANA_ADMIN_PASSWORD="
+    line: "GRAFANA_ADMIN_PASSWORD={{ grafana_admin_password }}"
+    mode: "0600"
+  no_log: true
+
+- name: Deploy Prometheus scrape config
+  ansible.builtin.template:
+    src: prometheus.yml.j2
+    dest: "{{ openclaw_base_dir }}/config/prometheus.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Deploy monitoring compose overlay
+  ansible.builtin.template:
+    src: compose.monitoring.yml.j2
+    dest: "{{ openclaw_base_dir }}/compose.monitoring.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Pull monitoring images
+  community.docker.docker_image:
+    name: "{{ item }}"
+    source: pull
+  loop:
+    - "prom/prometheus:{{ prometheus_version }}"
+    - "grafana/grafana-oss:{{ grafana_version }}"
+    - "oliver006/redis_exporter:{{ redis_exporter_version }}"
+
+- name: Build compose file arguments
+  ansible.builtin.set_fact:
+    compose_files: >-
+      -f docker-compose.yml
+      -f compose.monitoring.yml
+      {{ '-f compose.caddy.yml' if reverse_proxy == 'caddy' else '' }}
+      {{ '-f compose.tunnel.yml' if reverse_proxy == 'tunnel' else '' }}
+
+- name: Start stack with monitoring overlay
+  ansible.builtin.command: "docker compose {{ compose_files | trim }} up -d"
+  args:
+    chdir: "{{ openclaw_base_dir }}"
+
+- name: Reduce sandbox concurrency for 8 GB host (monitoring uses ~544 MB)
+  ansible.builtin.command: >
+    docker exec openclaw openclaw config set agents.defaults.sandbox.docker.maxConcurrent 2
+  changed_when: false
+
+- name: Display Grafana access info
+  ansible.builtin.debug:
+    msg: |
+      Grafana deployed at: https://{{ domain }}/grafana/
+      Admin password: stored in {{ openclaw_base_dir }}/.env
+      Next: Add Prometheus data source (http://openclaw-prometheus:9090) in Grafana UI.

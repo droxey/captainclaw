@@ -1,0 +1,11 @@
+{{ domain }} {
+{% if monitoring_enabled | bool %}
+    # Grafana dashboard (behind Grafana's own auth)
+    handle_path /grafana/* {
+        reverse_proxy openclaw-grafana:3000
+    }
+
+{% endif %}
+    # Default: OpenClaw gateway
+    reverse_proxy openclaw:18789
+}

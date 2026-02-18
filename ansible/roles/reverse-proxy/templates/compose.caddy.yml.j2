@@ -1,0 +1,23 @@
+services:
+  caddy:
+    image: caddy:{{ caddy_version }}
+    container_name: openclaw-caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - proxy-net
+    restart: unless-stopped
+
+networks:
+  proxy-net:
+    external: true
+    name: openclaw_proxy-net
+
+volumes:
+  caddy-data:
+  caddy-config:

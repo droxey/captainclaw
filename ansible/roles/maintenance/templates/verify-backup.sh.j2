@@ -1,0 +1,64 @@
+#!/bin/bash
+set -euo pipefail
+
+LOG="{{ openclaw_base_dir }}/monitoring/logs/backup-verify-$(date +%F).log"
+BACKUP_DIR="{{ openclaw_base_dir }}/monitoring/backups"
+ENCRYPTION_KEY_FILE="{{ openclaw_base_dir }}/monitoring/.backup-encryption-key"
+
+echo "=== Backup Verification — $(date) ===" | tee -a "$LOG"
+
+latest_config=$(ls -t "${BACKUP_DIR}"/openclaw-config-*.tar.gz* 2>/dev/null | head -1)
+latest_data=$(ls -t "${BACKUP_DIR}"/openclaw-data-*.tar.gz* 2>/dev/null | head -1)
+
+if [ -z "$latest_config" ] || [ -z "$latest_data" ]; then
+  echo "FAIL: Missing backup files" | tee -a "$LOG"
+  echo "  Config: ${latest_config:-NOT FOUND}" >> "$LOG"
+  echo "  Data:   ${latest_data:-NOT FOUND}" >> "$LOG"
+  exit 1
+fi
+
+echo "Config backup: $(basename "$latest_config")" >> "$LOG"
+echo "Data backup:   $(basename "$latest_data")" >> "$LOG"
+
+WORK_DIR=$(mktemp -d)
+trap 'rm -rf "$WORK_DIR"' EXIT
+
+verify_archive() {
+  local archive="$1"
+  local label="$2"
+
+  if [[ "$archive" == *.enc ]]; then
+    if [ ! -f "$ENCRYPTION_KEY_FILE" ]; then
+      echo "FAIL: $label — encrypted but no key file" | tee -a "$LOG"
+      return 1
+    fi
+    openssl enc -d -aes-256-cbc -pbkdf2 \
+      -in "$archive" -out "${WORK_DIR}/${label}.tar.gz" \
+      -pass "file:${ENCRYPTION_KEY_FILE}" 2>> "$LOG"
+    archive="${WORK_DIR}/${label}.tar.gz"
+  fi
+
+  if tar -tzf "$archive" > /dev/null 2>> "$LOG"; then
+    file_count=$(tar -tzf "$archive" | wc -l)
+    archive_size=$(du -sh "$archive" | cut -f1)
+    echo "PASS: $label — $file_count files, $archive_size" | tee -a "$LOG"
+    return 0
+  else
+    echo "FAIL: $label — archive is corrupt" | tee -a "$LOG"
+    return 1
+  fi
+}
+
+config_ok=0
+data_ok=0
+
+verify_archive "$latest_config" "config" && config_ok=1
+verify_archive "$latest_data" "data" && data_ok=1
+
+echo "---" >> "$LOG"
+if [ "$config_ok" -eq 1 ] && [ "$data_ok" -eq 1 ]; then
+  echo "RESULT: ALL BACKUPS VERIFIED" | tee -a "$LOG"
+else
+  echo "RESULT: VERIFICATION FAILED — check log: $LOG" | tee -a "$LOG"
+  exit 1
+fi

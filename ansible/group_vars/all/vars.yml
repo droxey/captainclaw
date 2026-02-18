@@ -1,0 +1,157 @@
+---
+# ── Host ───────────────────────────────────────────────────────────────
+deploy_user: deploy
+ssh_port: 9922
+admin_ip: "YOUR_STATIC_IP"
+openclaw_base_dir: /opt/openclaw
+domain: "openclaw.yourdomain.com"
+
+# ── Image Versions (pinned) ───────────────────────────────────────────
+openclaw_version: "2026.2.17"
+docker_proxy_version: "0.6.0"
+squid_version: "6.6-24.04_edge"
+litellm_version: "main-v1.81.3-stable"
+redis_version: "7.4.0-v3"
+caddy_version: "2-alpine"
+cloudflared_version: "2026.2.0"
+prometheus_version: "v3.2.1"
+grafana_version: "11.5.2"
+redis_exporter_version: "v1.67.0"
+
+# ── Docker Daemon ─────────────────────────────────────────────────────
+docker_log_max_size: "10m"
+docker_log_max_file: "3"
+docker_dns:
+  - "1.1.1.1"
+  - "8.8.8.8"
+docker_max_concurrent_downloads: 4
+docker_max_concurrent_uploads: 2
+
+# ── System Tuning ─────────────────────────────────────────────────────
+swappiness: 10
+inotify_max_watches: 524288
+inotify_max_instances: 512
+somaxconn: 1024
+
+# ── Egress Whitelist ──────────────────────────────────────────────────
+squid_allowed_domains:
+  - ".anthropic.com"
+  - ".openai.com"
+  - ".voyageai.com"
+# Uncomment to add more LLM providers:
+# squid_extra_domains:
+#   - ".groq.com"
+#   - ".googleapis.com"
+#   - ".x.ai"
+
+# ── LiteLLM ──────────────────────────────────────────────────────────
+litellm_models:
+  - name: "anthropic/claude-opus-4-6"
+    model: "claude-opus-4-6"
+    key_env: "ANTHROPIC_API_KEY"
+    max_budget: 100.0
+    rpm: 60
+  - name: "anthropic/claude-sonnet-4-5-20250929"
+    model: "claude-sonnet-4-5-20250929"
+    key_env: "ANTHROPIC_API_KEY"
+    max_budget: 50.0
+    rpm: 120
+  - name: "anthropic/claude-3-5-haiku-latest"
+    model: "claude-3-5-haiku-latest"
+    key_env: "ANTHROPIC_API_KEY"
+    max_budget: 20.0
+    rpm: 300
+
+litellm_cache_ttl: 3600
+litellm_similarity_threshold: 0.8
+redis_maxmemory: "96mb"
+
+# ── OpenClaw Hardening ────────────────────────────────────────────────
+openclaw_default_model: "anthropic/claude-opus-4-6"
+openclaw_heartbeat_model: "anthropic/claude-3-5-haiku-latest"
+openclaw_max_tokens: 4096
+
+# Sandbox
+sandbox_memory_limit: "512m"
+sandbox_memory_swap: "768m"
+sandbox_cpu_limit: "0.5"
+sandbox_pids_limit: 256
+sandbox_max_concurrent: 3
+sandbox_idle_hours: 12
+sandbox_max_age_days: 3
+
+# Container resource limits
+openclaw_cpus: "2.0"
+openclaw_memory: "4G"
+openclaw_memory_reservation: "2G"
+docker_proxy_cpus: "0.25"
+docker_proxy_memory: "128M"
+squid_cpus: "0.25"
+squid_memory: "128M"
+litellm_cpus: "1.0"
+litellm_memory: "1G"
+redis_cpus: "0.25"
+redis_memory: "128M"
+
+# Tool denials
+openclaw_agent_tool_denials:
+  - process
+  - browser
+  - nodes
+  - gateway
+  - sessions_spawn
+  - sessions_send
+  - elevated
+  - host_exec
+  - docker
+  - camera
+  - canvas
+  - cron
+
+openclaw_gateway_tool_denials:
+  - sessions_spawn
+  - sessions_send
+  - gateway
+  - elevated
+  - host_exec
+  - docker
+  - camera
+  - canvas
+  - cron
+
+# ── Channel ──────────────────────────────────────────────────────────
+telegram_enabled: true
+# telegram_bot_token lives in vault.yml
+
+# ── Memory ───────────────────────────────────────────────────────────
+memory_provider: "voyage"
+memory_model: "voyage-3-large"
+
+# ── Reverse Proxy ────────────────────────────────────────────────────
+# Options: caddy | tunnel | tailscale
+reverse_proxy: "caddy"
+
+# ── Monitoring (Optional Prometheus + Grafana) ───────────────────────
+monitoring_enabled: false
+
+# ── Maintenance ──────────────────────────────────────────────────────
+backup_retention_days: 14
+log_retention_days: 30
+backup_cron_hour: 3
+backup_cron_minute: 0
+token_rotation_day: 1
+token_rotation_hour: 4
+watchdog_interval: 5
+watchdog_restart_threshold: 3
+watchdog_disk_threshold: 85
+watchdog_memory_threshold: 90
+
+# ── Unattended Upgrades ─────────────────────────────────────────────
+auto_reboot: true
+auto_reboot_time: "05:00"
+
+# ── Tailscale (Optional) ────────────────────────────────────────────
+tailscale_enabled: false
+
+# ── IPv6 ─────────────────────────────────────────────────────────────
+disable_ipv6: false

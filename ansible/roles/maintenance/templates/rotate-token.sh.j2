@@ -1,0 +1,25 @@
+#!/bin/bash
+set -euo pipefail
+LOG="{{ openclaw_base_dir }}/monitoring/logs/token-rotation-$(date +%F).log"
+TOKEN_FILE="{{ openclaw_base_dir }}/monitoring/.gateway-token"
+
+(
+  flock -n 200 || { echo "Another rotation is already running"; exit 1; }
+
+  echo "=== Token Rotation — $(date) ===" >> "$LOG"
+
+  openssl rand -hex 32 > "${TOKEN_FILE}.new"
+  chmod 600 "${TOKEN_FILE}.new"
+
+  docker cp "${TOKEN_FILE}.new" openclaw:/tmp/.gw-token
+  docker exec openclaw \
+    sh -c 'openclaw config set gateway.auth.token "$(cat /tmp/.gw-token)" && rm -f /tmp/.gw-token' >> "$LOG" 2>&1
+
+  mv "${TOKEN_FILE}.new" "$TOKEN_FILE"
+
+  docker compose -f {{ openclaw_base_dir }}/docker-compose.yml restart openclaw >> "$LOG" 2>&1
+
+  echo "Token rotated. New token saved to $TOKEN_FILE" >> "$LOG"
+  echo "=== Rotation Complete ===" >> "$LOG"
+
+) 200>{{ openclaw_base_dir }}/monitoring/.rotate-token.lock

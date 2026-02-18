@@ -1,0 +1,171 @@
+---
+# Step 5: Gateway and sandbox hardening
+# All config applied via docker exec — idempotent (config set is a no-op if value matches)
+
+- name: Back up OpenClaw config before hardening
+  ansible.builtin.command: >
+    docker exec openclaw
+    cp /root/.openclaw/config.json /root/.openclaw/config.json.bak
+  changed_when: false
+  failed_when: false
+
+# ── Gateway Token ─────────────────────────────────────────────────────
+- name: Write gateway token to host file
+  ansible.builtin.copy:
+    content: "{{ gateway_token }}"
+    dest: "{{ openclaw_base_dir }}/monitoring/.gateway-token"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Copy gateway token into container
+  ansible.builtin.command: docker cp {{ openclaw_base_dir }}/monitoring/.gateway-token openclaw:/tmp/.gw-token
+  changed_when: false
+  no_log: true
+
+# ── Apply all hardening config ────────────────────────────────────────
+- name: Apply gateway network config
+  ansible.builtin.command: "docker exec openclaw openclaw config set {{ item.key }} {{ item.value }}"
+  loop:
+    - { key: 'gateway.bind', value: '"0.0.0.0"' }
+    - { key: 'gateway.trustedProxies', value: "'[\"127.0.0.1\", \"{{ proxy_net_subnet | default(\"172.16.0.0/12\") }}\"]'" }
+  changed_when: false
+
+- name: Apply gateway auth config
+  ansible.builtin.command: "docker exec openclaw sh -c '{{ item }}'"
+  loop:
+    - 'openclaw config set gateway.auth.mode "token"'
+    - 'openclaw config set gateway.auth.token "$(cat /tmp/.gw-token)"'
+    - 'rm -f /tmp/.gw-token'
+    - 'openclaw config set gateway.auth.allowTailscale false'
+  changed_when: false
+  no_log: true
+
+- name: Apply control UI security
+  ansible.builtin.command: "docker exec openclaw openclaw config set {{ item.key }} {{ item.value }}"
+  loop:
+    - { key: 'gateway.controlUi.allowInsecureAuth', value: 'false' }
+    - { key: 'gateway.controlUi.dangerouslyDisableDeviceAuth', value: 'false' }
+  changed_when: false
+
+- name: Apply discovery and browser config
+  ansible.builtin.command: "docker exec openclaw openclaw config set {{ item.key }} {{ item.value }}"
+  loop:
+    - { key: 'discovery.mdns.mode', value: '"off"' }
+    - { key: 'gateway.nodes.browser.mode', value: '"off"' }
+  changed_when: false
+
+- name: Apply logging config
+  ansible.builtin.command: "docker exec openclaw openclaw config set {{ item.key }} {{ item.value }}"
+  loop:
+    - { key: 'logging.redactSensitive', value: '"tools"' }
+    - { key: 'logging.file', value: '"/root/.openclaw/logs/openclaw.log"' }
+    - { key: 'logging.format', value: '"json"' }
+  changed_when: false
+
+- name: Apply session and plugin config
+  ansible.builtin.command: "docker exec openclaw openclaw config set {{ item.key }} {{ item.value }}"
+  loop:
+    - { key: 'session.dmScope', value: '"per-channel-peer"' }
+    - { key: 'plugins.allow', value: "'[]'" }
+  changed_when: false
+
+- name: Apply sandbox isolation config
+  ansible.builtin.command: "docker exec openclaw openclaw config set {{ item.key }} {{ item.value }}"
+  loop:
+    - { key: 'agents.defaults.sandbox.mode', value: '"all"' }
+    - { key: 'agents.defaults.sandbox.scope', value: '"agent"' }
+    - { key: 'agents.defaults.sandbox.workspaceAccess', value: '"none"' }
+    - { key: 'agents.defaults.sandbox.docker.network', value: '"none"' }
+    - { key: "agents.defaults.sandbox.docker.capDrop", value: "'[\"ALL\"]'" }
+  changed_when: false
+
+- name: Apply sandbox resource caps
+  ansible.builtin.command: "docker exec openclaw openclaw config set {{ item.key }} {{ item.value }}"
+  loop:
+    - { key: 'agents.defaults.sandbox.docker.memoryLimit', value: '"{{ sandbox_memory_limit }}"' }
+    - { key: 'agents.defaults.sandbox.docker.memorySwap', value: '"{{ sandbox_memory_swap }}"' }
+    - { key: 'agents.defaults.sandbox.docker.cpuLimit', value: '"{{ sandbox_cpu_limit }}"' }
+    - { key: 'agents.defaults.sandbox.docker.pidsLimit', value: '{{ sandbox_pids_limit }}' }
+    - { key: 'agents.defaults.sandbox.docker.ulimits.nofile.soft', value: '1024' }
+    - { key: 'agents.defaults.sandbox.docker.ulimits.nofile.hard', value: '2048' }
+    - { key: 'agents.defaults.sandbox.docker.maxConcurrent', value: '{{ sandbox_max_concurrent }}' }
+  changed_when: false
+
+- name: Apply sandbox lifecycle config
+  ansible.builtin.command: "docker exec openclaw openclaw config set {{ item.key }} {{ item.value }}"
+  loop:
+    - { key: 'agents.defaults.sandbox.docker.idleHours', value: '{{ sandbox_idle_hours }}' }
+    - { key: 'agents.defaults.sandbox.docker.maxAgeDays', value: '{{ sandbox_max_age_days }}' }
+  changed_when: false
+
+- name: Apply token cost optimization
+  ansible.builtin.command: "docker exec openclaw openclaw config set {{ item.key }} {{ item.value }}"
+  loop:
+    - { key: 'agents.defaults.maxTokens', value: '{{ openclaw_max_tokens }}' }
+    - { key: 'agents.defaults.model.heartbeat', value: '"{{ openclaw_heartbeat_model }}"' }
+  changed_when: false
+
+- name: Apply tool denials (agent level)
+  ansible.builtin.command: >
+    docker exec openclaw openclaw config set agents.defaults.tools.deny
+    '{{ openclaw_agent_tool_denials | to_json }}'
+  changed_when: false
+
+- name: Apply tool denials (gateway level)
+  ansible.builtin.command: >
+    docker exec openclaw openclaw config set gateway.tools.deny
+    '{{ openclaw_gateway_tool_denials | to_json }}'
+  changed_when: false
+
+- name: Apply group chat safety
+  ansible.builtin.command: "docker exec openclaw openclaw config set {{ item.key }} {{ item.value }}"
+  loop:
+    - { key: 'agents.defaults.groupChat.enableReasoning', value: 'false' }
+    - { key: 'agents.defaults.groupChat.enableVerbose', value: 'false' }
+  changed_when: false
+
+- name: Apply channel policies
+  ansible.builtin.command: "docker exec openclaw openclaw config set {{ item.key }} {{ item.value }}"
+  loop:
+    - { key: 'channels.*.dmPolicy', value: '"pairing"' }
+    - { key: 'channels.*.groups.*.requireMention', value: 'true' }
+  changed_when: false
+
+# ── SOUL.md ───────────────────────────────────────────────────────────
+- name: Deploy SOUL.md into container
+  ansible.builtin.command: >
+    docker exec openclaw sh -c 'cat > /root/.openclaw/SOUL.md << '"'"'SOUL_EOF'"'"'
+    {{ lookup("template", "SOUL.md.j2") }}
+    SOUL_EOF'
+  changed_when: false
+
+# ── File Permissions ──────────────────────────────────────────────────
+- name: Lock down OpenClaw data directory permissions
+  ansible.builtin.command: "docker exec openclaw {{ item }}"
+  loop:
+    - chmod 700 /root/.openclaw
+    - sh -c 'find /root/.openclaw -type f -exec chmod 600 {} \;'
+  changed_when: false
+
+# ── Verify and Fix ────────────────────────────────────────────────────
+- name: Run security audit with auto-fix
+  ansible.builtin.command: docker exec openclaw openclaw security audit --deep --fix
+  register: security_audit
+  changed_when: false
+
+- name: Run doctor check
+  ansible.builtin.command: docker exec openclaw openclaw doctor
+  register: doctor_check
+  changed_when: false
+
+- name: Show security audit result
+  ansible.builtin.debug:
+    var: security_audit.stdout_lines
+
+# ── Restart to apply config ───────────────────────────────────────────
+- name: Restart OpenClaw to apply hardening
+  ansible.builtin.command: docker compose restart openclaw
+  args:
+    chdir: "{{ openclaw_base_dir }}"

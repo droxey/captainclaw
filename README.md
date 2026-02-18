@@ -45,20 +45,198 @@ Three bridge networks enforce least-privilege communication. `openclaw-net` is *
 
 ## Table of Contents
 
-- [Step 1: Prerequisites](#step-1-prerequisites)
-- [Step 2: Configure Firewall](#step-2-configure-firewall)
-- [Step 3: Create Configuration Files](#step-3-create-configuration-files)
-- [Step 4: Deploy](#step-4-deploy)
-- [Step 5: Gateway and Sandbox Hardening](#step-5-gateway-and-sandbox-hardening)
-- [Step 6: API Keys and Model Configuration](#step-6-api-keys-and-model-configuration)
-- [Step 7: Channel Integration](#step-7-channel-integration)
-- [Step 8: Memory and RAG Configuration](#step-8-memory-and-rag-configuration)
-- [Step 9: Reverse Proxy Setup](#step-9-reverse-proxy-setup)
-- [Step 10: Verification](#step-10-verification)
-- [Step 11: Maintenance](#step-11-maintenance)
-- [Step 12: Troubleshooting](#step-12-troubleshooting)
-- [Step 13: High Availability and Disaster Recovery](#step-13-high-availability-and-disaster-recovery)
-- [Step 14: Scaling](#step-14-scaling)
+- [Automated Deployment (Ansible)](#automated-deployment-ansible)
+- [Manual Deployment (Steps 1-14)](#step-1-prerequisites)
+  - [Step 1: Prerequisites](#step-1-prerequisites)
+  - [Step 2: Configure Firewall](#step-2-configure-firewall)
+  - [Step 3: Create Configuration Files](#step-3-create-configuration-files)
+  - [Step 4: Deploy](#step-4-deploy)
+  - [Step 5: Gateway and Sandbox Hardening](#step-5-gateway-and-sandbox-hardening)
+  - [Step 6: API Keys and Model Configuration](#step-6-api-keys-and-model-configuration)
+  - [Step 7: Channel Integration](#step-7-channel-integration)
+  - [Step 8: Memory and RAG Configuration](#step-8-memory-and-rag-configuration)
+  - [Step 9: Reverse Proxy Setup](#step-9-reverse-proxy-setup)
+  - [Step 10: Verification](#step-10-verification)
+  - [Step 11: Maintenance](#step-11-maintenance)
+  - [Step 12: Troubleshooting](#step-12-troubleshooting)
+  - [Step 13: High Availability and Disaster Recovery](#step-13-high-availability-and-disaster-recovery)
+  - [Step 14: Scaling](#step-14-scaling)
+
+---
+
+## Automated Deployment (Ansible)
+
+The `ansible/` directory contains a complete Ansible playbook that automates Steps 1-13 of this guide. One command turns a fresh Ubuntu 24.04 VPS into a fully hardened OpenClaw deployment — SSH hardening, firewall, Docker, all five containers, gateway hardening, channel integration, reverse proxy, backups, and monitoring.
+
+### Prerequisites
+
+On your **local machine** (the control node):
+
+```bash
+# Install Ansible (2.16+)
+pip install ansible
+
+# Install required collections
+cd ansible
+ansible-galaxy collection install -r requirements.yml
+```
+
+The **target server** needs only SSH access and Python 3 (Ubuntu 24.04 includes both).
+
+### Quick Start
+
+```bash
+cd ansible
+
+# 1. Configure your server IP
+#    Edit inventory/hosts.yml — set ansible_host to your server IP
+
+# 2. Set your variables
+#    Edit group_vars/all/vars.yml — domain, admin_ip, image versions, options
+
+# 3. Create and encrypt your secrets vault
+cp group_vars/all/vault.yml.example group_vars/all/vault.yml
+#    Edit vault.yml — add API keys, Telegram bot token
+ansible-vault encrypt group_vars/all/vault.yml
+
+# 4. Deploy everything
+ansible-playbook playbook.yml --ask-vault-pass
+```
+
+Tokens and encryption keys left empty in `vault.yml` are auto-generated on first run.
+
+### What Gets Deployed
+
+| Ansible Role | Guide Steps | What It Does |
+|-------------|-------------|-------------|
+| `base` | 1-2 | SSH hardening, Docker install, daemon tuning, sysctl, UFW, fail2ban, Cloudflare ingress |
+| `openclaw-config` | 3 | Squid config, LiteLLM config, Docker Compose file, `.env` with secrets |
+| `openclaw-deploy` | 4 | `docker compose up`, wait for healthy, tighten Squid ACL to actual subnet |
+| `openclaw-harden` | 5 | Gateway auth, sandbox isolation, resource caps, tool denials, SOUL.md |
+| `openclaw-integrate` | 6-8 | LiteLLM as model proxy, Telegram channel, Voyage AI memory index |
+| `reverse-proxy` | 9 | Caddy (default), Cloudflare Tunnel, or Tailscale Serve |
+| `verify` | 10 | Security audit, container health, egress tests, config spot-checks |
+| `maintenance` | 11, 13 | Backup/rotation/watchdog scripts, cron jobs, unattended upgrades |
+| `monitoring` | 13.2.1 | Prometheus + Grafana + Redis exporter (optional, `monitoring_enabled: true`) |
+
+### Run Specific Steps
+
+Tags let you target individual roles without re-running the full playbook:
+
+```bash
+# Re-apply hardening only
+ansible-playbook playbook.yml --ask-vault-pass --tags harden
+
+# Update reverse proxy config
+ansible-playbook playbook.yml --ask-vault-pass --tags proxy
+
+# Dry run — show what would change without modifying anything
+ansible-playbook playbook.yml --ask-vault-pass --check --diff
+
+# Deploy with monitoring stack enabled
+ansible-playbook playbook.yml --ask-vault-pass -e monitoring_enabled=true
+```
+
+Available tags: `base`, `config`, `deploy`, `harden`, `integrate`, `proxy`, `verify`, `maintenance`, `monitoring`.
+
+### Key Configuration (vars.yml)
+
+```yaml
+# ── Required ──────────────────────────────────────────
+domain: "openclaw.yourdomain.com"      # Your domain (Cloudflare-proxied)
+admin_ip: "YOUR_STATIC_IP"             # SSH access whitelist
+
+# ── Reverse Proxy ─────────────────────────────────────
+reverse_proxy: "caddy"                 # caddy | tunnel | tailscale
+
+# ── Optional Features ─────────────────────────────────
+monitoring_enabled: false              # true → deploys Prometheus + Grafana
+tailscale_enabled: false               # true → replaces public SSH with Tailscale
+disable_ipv6: false                    # true → disables IPv6 system-wide
+telegram_enabled: true                 # false → skips Telegram channel setup
+
+# ── Resource Tuning ───────────────────────────────────
+openclaw_memory: "4G"                  # Increase for Growth/Production tier
+sandbox_max_concurrent: 3             # Reduce to 2 if monitoring_enabled
+```
+
+See `group_vars/all/vars.yml` for the full variable reference with all image versions, resource limits, LiteLLM model tiers, and security thresholds.
+
+### Secrets (vault.yml)
+
+```yaml
+# ── Required ──────────────────────────────────────────
+anthropic_api_key: "sk-ant-..."        # From console.anthropic.com
+voyage_api_key: "pa-..."              # From dash.voyageai.com
+telegram_bot_token: "123:ABC..."       # From @BotFather
+
+# ── Auto-Generated (leave empty) ─────────────────────
+litellm_master_key: ""                 # Random 64-char hex
+gateway_token: ""                      # Random 64-char hex
+backup_encryption_key: ""              # Random 64-char hex
+
+# ── Optional ──────────────────────────────────────────
+# tunnel_token: "..."                  # If reverse_proxy: tunnel
+# grafana_admin_password: ""           # If monitoring_enabled: true
+```
+
+### Directory Structure
+
+```
+ansible/
+├── ansible.cfg                        # SSH pipelining, YAML output, retry config
+├── requirements.yml                   # Galaxy collections (community.docker, community.general)
+├── inventory/hosts.yml                # Target server IP and SSH config
+├── group_vars/all/
+│   ├── vars.yml                       # All configuration variables
+│   └── vault.yml.example             # Secret template (copy → vault.yml → encrypt)
+├── playbook.yml                       # Orchestrates all roles in deployment order
+└── roles/
+    ├── base/                          # SSH, Docker, sysctl, UFW, fail2ban
+    ├── openclaw-config/               # Squid, LiteLLM, Compose, .env templates
+    ├── openclaw-deploy/               # docker compose up, health wait, ACL tighten
+    ├── openclaw-harden/               # 30+ config set commands, SOUL.md, security audit
+    ├── openclaw-integrate/            # Model proxy, Telegram, memory index
+    ├── reverse-proxy/                 # Caddy / Tunnel / Tailscale (conditional)
+    ├── verify/                        # Post-deploy health and security checks
+    ├── maintenance/                   # Scripts, cron, unattended-upgrades
+    └── monitoring/                    # Prometheus + Grafana (optional)
+```
+
+### Idempotency
+
+The playbook is safe to re-run. Ansible skips tasks that are already in the desired state — UFW rules won't duplicate, Docker won't reinstall, config files won't regenerate unless their templates change. The `openclaw-harden` role runs `config set` commands unconditionally (OpenClaw's CLI doesn't expose a dry-run mode), but applying the same value twice is a no-op.
+
+### What Still Requires Manual Steps
+
+| Task | Why |
+|------|-----|
+| Create Telegram bot via @BotFather | Interactive chat — can't be automated |
+| Obtain Cloudflare Tunnel token | Dashboard-only operation |
+| Generate API keys (Anthropic, Voyage) | Provider dashboard |
+| Run `tailscale up` (first auth) | Requires browser-based device authorization |
+| Configure Grafana data sources + dashboards | One-time UI setup after deploy |
+| Cloudflare Health Check setup (§13.4) | Dashboard configuration |
+| Quarterly DR drills (§13.10) | Intentionally manual — tests human procedures |
+
+### Upgrading OpenClaw
+
+Update the image version in `vars.yml` and re-run:
+
+```bash
+# In vars.yml, change:
+#   openclaw_version: "2026.2.17"  →  openclaw_version: "2026.3.0"
+
+ansible-playbook playbook.yml --ask-vault-pass --tags config,deploy,harden,verify
+```
+
+This regenerates the Compose file with the new image, pulls it, restarts the stack, re-applies hardening (in case the config schema changed), and runs verification.
+
+---
+
+## Manual Deployment
+
+> The steps below are the manual equivalent of the Ansible playbook above. If you used `ansible-playbook` to deploy, skip to [Step 12: Troubleshooting](#step-12-troubleshooting) or [Step 14: Scaling](#step-14-scaling) for reference material not covered by automation.
 
 ---
 

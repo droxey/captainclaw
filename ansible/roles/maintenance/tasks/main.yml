@@ -1,0 +1,109 @@
+---
+# Steps 11 + 13: Backup, token rotation, watchdog, unattended upgrades
+
+# ── Backup Encryption Key ─────────────────────────────────────────────
+- name: Deploy backup encryption key
+  ansible.builtin.copy:
+    content: "{{ backup_encryption_key }}"
+    dest: "{{ openclaw_base_dir }}/monitoring/.backup-encryption-key"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+# ── Maintenance Scripts ───────────────────────────────────────────────
+- name: Deploy backup script
+  ansible.builtin.template:
+    src: backup.sh.j2
+    dest: "{{ openclaw_base_dir }}/monitoring/backup.sh"
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Deploy token rotation script
+  ansible.builtin.template:
+    src: rotate-token.sh.j2
+    dest: "{{ openclaw_base_dir }}/monitoring/rotate-token.sh"
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Deploy watchdog script
+  ansible.builtin.template:
+    src: watchdog.sh.j2
+    dest: "{{ openclaw_base_dir }}/monitoring/watchdog.sh"
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Deploy backup verification script
+  ansible.builtin.template:
+    src: verify-backup.sh.j2
+    dest: "{{ openclaw_base_dir }}/monitoring/verify-backup.sh"
+    owner: root
+    group: root
+    mode: "0700"
+
+# ── Cron Jobs ─────────────────────────────────────────────────────────
+- name: Schedule daily backup
+  ansible.builtin.cron:
+    name: "OpenClaw daily backup"
+    minute: "{{ backup_cron_minute }}"
+    hour: "{{ backup_cron_hour }}"
+    job: "{{ openclaw_base_dir }}/monitoring/backup.sh >> {{ openclaw_base_dir }}/monitoring/logs/cron.log 2>&1"
+    user: root
+
+- name: Schedule monthly token rotation
+  ansible.builtin.cron:
+    name: "OpenClaw monthly token rotation"
+    minute: "0"
+    hour: "{{ token_rotation_hour }}"
+    day: "{{ token_rotation_day }}"
+    job: "{{ openclaw_base_dir }}/monitoring/rotate-token.sh >> {{ openclaw_base_dir }}/monitoring/logs/cron.log 2>&1"
+    user: root
+
+- name: Schedule watchdog health checks
+  ansible.builtin.cron:
+    name: "OpenClaw watchdog"
+    minute: "*/{{ watchdog_interval }}"
+    job: "{{ openclaw_base_dir }}/monitoring/watchdog.sh >> {{ openclaw_base_dir }}/monitoring/logs/cron.log 2>&1"
+    user: root
+
+- name: Schedule weekly backup verification
+  ansible.builtin.cron:
+    name: "OpenClaw weekly backup verification"
+    minute: "30"
+    hour: "{{ backup_cron_hour }}"
+    weekday: "0"
+    job: "{{ openclaw_base_dir }}/monitoring/verify-backup.sh >> {{ openclaw_base_dir }}/monitoring/logs/cron.log 2>&1"
+    user: root
+
+# ── Unattended Security Upgrades (§13.3) ─────────────────────────────
+- name: Install unattended-upgrades
+  ansible.builtin.apt:
+    name:
+      - unattended-upgrades
+      - apt-listchanges
+    state: present
+
+- name: Configure unattended-upgrades
+  ansible.builtin.template:
+    src: 50unattended-upgrades.j2
+    dest: /etc/apt/apt.conf.d/50unattended-upgrades
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Configure auto-upgrades schedule
+  ansible.builtin.template:
+    src: 20auto-upgrades.j2
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Enable unattended-upgrades service
+  ansible.builtin.systemd:
+    name: unattended-upgrades
+    state: started
+    enabled: true

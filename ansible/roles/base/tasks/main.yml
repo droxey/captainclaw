@@ -1,0 +1,210 @@
+---
+# Steps 1-2: SSH hardening, Docker, system tuning, firewall, fail2ban
+
+# ── SSH Hardening ─────────────────────────────────────────────────────
+- name: Create deploy user
+  ansible.builtin.user:
+    name: "{{ deploy_user }}"
+    groups: sudo
+    append: true
+    shell: /bin/bash
+    create_home: true
+
+- name: Ensure .ssh directory exists for deploy user
+  ansible.builtin.file:
+    path: "/home/{{ deploy_user }}/.ssh"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "0700"
+
+- name: Copy root authorized_keys to deploy user (if not already present)
+  ansible.builtin.copy:
+    src: /root/.ssh/authorized_keys
+    dest: "/home/{{ deploy_user }}/.ssh/authorized_keys"
+    remote_src: true
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "0600"
+    force: false
+
+- name: Deploy SSH hardening config
+  ansible.builtin.template:
+    src: 99-hardening.conf.j2
+    dest: /etc/ssh/sshd_config.d/99-hardening.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: reload ssh
+
+# ── Docker Installation ───────────────────────────────────────────────
+- name: Check if Docker is installed
+  ansible.builtin.command: docker --version
+  register: docker_check
+  changed_when: false
+  failed_when: false
+
+- name: Install Docker via official script
+  ansible.builtin.shell: curl -fsSL https://get.docker.com | sh
+  args:
+    creates: /usr/bin/docker
+  when: docker_check.rc != 0
+
+- name: Add deploy user to docker group
+  ansible.builtin.user:
+    name: "{{ deploy_user }}"
+    groups: docker
+    append: true
+
+- name: Verify Docker Compose v2
+  ansible.builtin.command: docker compose version
+  register: compose_check
+  changed_when: false
+
+# ── Docker Daemon Tuning ──────────────────────────────────────────────
+- name: Create /etc/docker directory
+  ansible.builtin.file:
+    path: /etc/docker
+    state: directory
+    mode: "0755"
+
+- name: Deploy Docker daemon config
+  ansible.builtin.template:
+    src: daemon.json.j2
+    dest: /etc/docker/daemon.json
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart docker
+
+# ── System Tuning ─────────────────────────────────────────────────────
+- name: Deploy sysctl tuning
+  ansible.builtin.template:
+    src: 99-openclaw.conf.j2
+    dest: /etc/sysctl.d/99-openclaw.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: reload sysctl
+
+# ── Firewall ──────────────────────────────────────────────────────────
+- name: Install UFW and fail2ban
+  ansible.builtin.apt:
+    name:
+      - ufw
+      - fail2ban
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Set UFW default deny incoming
+  community.general.ufw:
+    direction: incoming
+    default: deny
+
+- name: Set UFW default allow outgoing
+  community.general.ufw:
+    direction: outgoing
+    default: allow
+
+- name: Allow SSH from admin IP (rate limited)
+  community.general.ufw:
+    rule: limit
+    from_ip: "{{ admin_ip }}"
+    to_port: "{{ ssh_port }}"
+    proto: tcp
+
+- name: Deploy fail2ban SSH jail
+  ansible.builtin.template:
+    src: jail.local.j2
+    dest: /etc/fail2ban/jail.local
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart fail2ban
+
+- name: Fetch Cloudflare IPv4 ranges
+  ansible.builtin.uri:
+    url: https://www.cloudflare.com/ips-v4
+    return_content: true
+    timeout: 30
+  register: cf_ipv4
+  retries: 3
+  delay: 5
+  until: cf_ipv4 is not failed
+
+- name: Fetch Cloudflare IPv6 ranges
+  ansible.builtin.uri:
+    url: https://www.cloudflare.com/ips-v6
+    return_content: true
+    timeout: 30
+  register: cf_ipv6
+  retries: 3
+  delay: 5
+  until: cf_ipv6 is not failed
+  when: not (disable_ipv6 | bool)
+
+- name: Allow Cloudflare IPv4 ingress on 80,443
+  community.general.ufw:
+    rule: allow
+    from_ip: "{{ item }}"
+    to_port: "80,443"
+    proto: tcp
+  loop: "{{ cf_ipv4.content.split('\n') | select('match', '.+') | list }}"
+  when: cf_ipv4 is succeeded
+
+- name: Allow Cloudflare IPv6 ingress on 80,443
+  community.general.ufw:
+    rule: allow
+    from_ip: "{{ item }}"
+    to_port: "80,443"
+    proto: tcp
+  loop: "{{ cf_ipv6.content.split('\n') | select('match', '.+') | list }}"
+  when: not (disable_ipv6 | bool) and cf_ipv6 is succeeded
+
+- name: Enable UFW
+  community.general.ufw:
+    state: enabled
+
+# ── Tailscale (Optional) ─────────────────────────────────────────────
+- name: Install Tailscale
+  when: tailscale_enabled | bool
+  block:
+    - name: Run Tailscale install script
+      ansible.builtin.shell: curl -fsSL https://tailscale.com/install.sh | sh
+      args:
+        creates: /usr/bin/tailscale
+
+    - name: Allow SSH from Tailscale CGNAT range
+      community.general.ufw:
+        rule: allow
+        from_ip: "100.64.0.0/10"
+        to_port: "{{ ssh_port }}"
+        proto: tcp
+
+    - name: Remove public admin IP SSH rule (Tailscale replaces it)
+      community.general.ufw:
+        rule: limit
+        from_ip: "{{ admin_ip }}"
+        to_port: "{{ ssh_port }}"
+        proto: tcp
+        delete: true
+
+    - name: Remind operator to run tailscale up
+      ansible.builtin.debug:
+        msg: >
+          Tailscale is installed but not authenticated.
+          SSH into the server and run: sudo tailscale up
+
+# ── Disable IPv6 (Optional) ──────────────────────────────────────────
+- name: Disable IPv6 in UFW
+  ansible.builtin.lineinfile:
+    path: /etc/default/ufw
+    regexp: "^IPV6="
+    line: "IPV6=no"
+  notify: reload ufw
+  when: disable_ipv6 | bool
+
+# ── Flush handlers to apply Docker restart before later roles ─────────
+- name: Flush handlers
+  ansible.builtin.meta: flush_handlers

@@ -1,0 +1,51 @@
+---
+# Step 3: Create configuration files (squid, litellm, docker-compose)
+
+- name: Create OpenClaw directory tree
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  loop:
+    - "{{ openclaw_base_dir }}"
+    - "{{ openclaw_base_dir }}/config"
+    - "{{ openclaw_base_dir }}/monitoring"
+    - "{{ openclaw_base_dir }}/monitoring/logs"
+    - "{{ openclaw_base_dir }}/monitoring/backups"
+
+- name: Deploy Squid egress config
+  ansible.builtin.template:
+    src: squid.conf.j2
+    dest: "{{ openclaw_base_dir }}/config/squid.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart egress
+
+- name: Deploy LiteLLM config
+  ansible.builtin.template:
+    src: litellm-config.yaml.j2
+    dest: "{{ openclaw_base_dir }}/config/litellm-config.yaml"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart litellm
+
+- name: Deploy Docker Compose file
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ openclaw_base_dir }}/docker-compose.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Deploy .env file with secrets
+  ansible.builtin.template:
+    src: env.j2
+    dest: "{{ openclaw_base_dir }}/.env"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true

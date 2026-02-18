@@ -1,0 +1,25 @@
+---
+# Copy this file to vault.yml and encrypt with: ansible-vault encrypt vault.yml
+#
+# These values are sensitive — never commit vault.yml unencrypted.
+# The playbook auto-generates tokens/keys left empty on first run.
+
+# ── LLM Provider API Keys (required) ────────────────────────────────
+anthropic_api_key: "sk-ant-your-key-here"
+voyage_api_key: "pa-your-key-here"
+# openai_api_key: "sk-your-key-here"
+
+# ── Auto-Generated Secrets (leave empty — playbook generates on first run)
+litellm_master_key: ""
+gateway_token: ""
+backup_encryption_key: ""
+
+# ── Channel Tokens ──────────────────────────────────────────────────
+telegram_bot_token: "YOUR_TELEGRAM_BOT_TOKEN"
+
+# ── Reverse Proxy (if using Cloudflare Tunnel) ──────────────────────
+# tunnel_token: "YOUR_TUNNEL_TOKEN"
+
+# ── Monitoring (if monitoring_enabled: true) ─────────────────────────
+# Leave empty — playbook auto-generates if not set
+grafana_admin_password: ""

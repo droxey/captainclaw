@@ -15,12 +15,30 @@ This repository is the **OpenClaw Hardened Swarm Deployment** guide — a produc
 ```
 clawswarm/
 ├── CLAUDE.md                    # This file — project context + style guide for AI assistants
-├── README.md                    # Primary artifact: 13-step deployment guide (706 lines)
-└── .claude/
-    └── settings.local.json      # Claude Code permissions and output style config
+├── README.md                    # Primary artifact: 14-step deployment guide + Ansible docs
+├── .claude/
+│   └── settings.local.json      # Claude Code permissions and output style config
+└── ansible/                     # Ansible automation for the deployment guide
+    ├── ansible.cfg
+    ├── requirements.yml
+    ├── playbook.yml
+    ├── inventory/hosts.yml
+    ├── group_vars/all/
+    │   ├── vars.yml
+    │   └── vault.yml.example
+    └── roles/
+        ├── base/                # Steps 1-2: SSH, Docker, sysctl, UFW, fail2ban
+        ├── openclaw-config/     # Step 3: Squid, LiteLLM, Compose templates
+        ├── openclaw-deploy/     # Step 4: docker compose up, ACL tighten
+        ├── openclaw-harden/     # Step 5: gateway/sandbox hardening
+        ├── openclaw-integrate/  # Steps 6-8: API, Telegram, memory
+        ├── reverse-proxy/       # Step 9: Caddy/Tunnel/Tailscale
+        ├── verify/              # Step 10: post-deploy verification
+        ├── maintenance/         # Steps 11+13: backups, watchdog, cron
+        └── monitoring/          # Step 13.2.1: Prometheus + Grafana (optional)
 ```
 
-No Dockerfiles, no `docker-compose.yml` files, no CI/CD pipelines, no dependency manifests. CapRover YAML specs and shell scripts are embedded directly in `README.md`.
+No Dockerfiles or CI/CD pipelines. CapRover YAML specs and shell scripts are embedded in `README.md`. The `ansible/` directory provides Jinja2-templated versions of these same configs for automated deployment.
 
 ## Architecture
 

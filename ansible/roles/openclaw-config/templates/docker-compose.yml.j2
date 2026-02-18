@@ -1,0 +1,196 @@
+services:
+  docker-proxy:
+    image: tecnativa/docker-socket-proxy:{{ docker_proxy_version }}
+    container_name: openclaw-docker-proxy
+    environment:
+      CONTAINERS: "1"
+      IMAGES: "1"
+      INFO: "1"
+      VERSION: "1"
+      PING: "1"
+      EVENTS: "1"
+      EXEC: "1"
+      # Explicitly deny sensitive APIs
+      BUILD: "0"
+      COMMIT: "0"
+      CONFIGS: "0"
+      DISTRIBUTION: "0"
+      NETWORKS: "0"
+      NODES: "0"
+      PLUGINS: "0"
+      SECRETS: "0"
+      SERVICES: "0"
+      SESSION: "0"
+      SWARM: "0"
+      SYSTEM: "0"
+      TASKS: "0"
+      VOLUMES: "0"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - openclaw-net
+    read_only: true
+    tmpfs:
+      - /tmp:size=16M
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:2375/_ping || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "{{ docker_proxy_cpus }}"
+          memory: {{ docker_proxy_memory }}
+    restart: unless-stopped
+
+  openclaw:
+    image: openclaw/openclaw:{{ openclaw_version }}
+    container_name: openclaw
+    environment:
+      DOCKER_HOST: tcp://openclaw-docker-proxy:2375
+      HTTP_PROXY: http://openclaw-egress:3128
+      HTTPS_PROXY: http://openclaw-egress:3128
+      NO_PROXY: openclaw-docker-proxy,openclaw-litellm,localhost,127.0.0.1
+      OPENCLAW_DISABLE_BONJOUR: "1"
+      NODE_OPTIONS: "--dns-result-order=ipv4first"
+    volumes:
+      - openclaw-data:/root/.openclaw
+    networks:
+      - openclaw-net
+      - proxy-net
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+    depends_on:
+      docker-proxy:
+        condition: service_healthy
+      openclaw-egress:
+        condition: service_healthy
+      litellm:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "openclaw", "doctor", "--quiet"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "{{ openclaw_cpus }}"
+          memory: {{ openclaw_memory }}
+        reservations:
+          memory: {{ openclaw_memory_reservation }}
+    restart: unless-stopped
+
+  litellm:
+    image: ghcr.io/berriai/litellm:{{ litellm_version }}
+    container_name: openclaw-litellm
+    volumes:
+      - ./config/litellm-config.yaml:/app/config.yaml:ro
+    environment:
+      LITELLM_MASTER_KEY: "${LITELLM_MASTER_KEY}"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
+      VOYAGE_API_KEY: "${VOYAGE_API_KEY}"
+      REDIS_HOST: "openclaw-redis"
+      REDIS_PORT: "6379"
+      HTTP_PROXY: http://openclaw-egress:3128
+      HTTPS_PROXY: http://openclaw-egress:3128
+      NO_PROXY: openclaw-redis,localhost,127.0.0.1
+    networks:
+      - openclaw-net
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:4000/health/liveliness || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "{{ litellm_cpus }}"
+          memory: {{ litellm_memory }}
+    restart: unless-stopped
+
+  openclaw-egress:
+    image: ubuntu/squid:{{ squid_version }}
+    container_name: openclaw-egress
+    volumes:
+      - ./config/squid.conf:/etc/squid/squid.conf:ro
+    networks:
+      - openclaw-net
+      - egress-net
+    read_only: true
+    tmpfs:
+      - /var/spool/squid:size=64M
+      - /var/log/squid:size=32M
+      - /var/run:size=8M
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "squidclient -h localhost mgr:info 2>&1 | grep -q 'Squid Object Cache' || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "{{ squid_cpus }}"
+          memory: {{ squid_memory }}
+    restart: unless-stopped
+
+  redis:
+    image: redis/redis-stack-server:{{ redis_version }}
+    container_name: openclaw-redis
+    volumes:
+      - redis-data:/data
+    networks:
+      - openclaw-net
+    read_only: true
+    tmpfs:
+      - /tmp:size=32M
+    security_opt:
+      - no-new-privileges:true
+    command: >
+      redis-server
+      --maxmemory {{ redis_maxmemory }}
+      --maxmemory-policy allkeys-lru
+      --save 300 10
+      --appendonly no
+      --protected-mode no
+      --loadmodule /opt/redis-stack/lib/redisearch.so
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "{{ redis_cpus }}"
+          memory: {{ redis_memory }}
+    restart: unless-stopped
+
+networks:
+  openclaw-net:
+    driver: bridge
+    internal: true
+  proxy-net:
+    driver: bridge
+  egress-net:
+    driver: bridge
+
+volumes:
+  openclaw-data:
+  redis-data:
