@@ -55,6 +55,7 @@ All three services communicate over an **internal bridge network** — traffic n
 - [Step 11: Maintenance](#step-11-maintenance)
 - [Step 12: Troubleshooting](#step-12-troubleshooting)
 - [Step 13: Disaster Recovery](#step-13-disaster-recovery)
+- [Step 14: Scaling](#step-14-scaling)
 
 ---
 
@@ -875,6 +876,327 @@ docker exec openclaw openclaw security audit --deep
 # 9. Re-apply firewall (Step 2)
 ```
 
+### Step 14: Scaling
+
+This deployment runs a single OpenClaw Gateway process on a single server. OpenClaw's architecture — single-process Gateway, embedded LanceDB for memory, file-based session state — is inherently vertical-first. There is no built-in clustering or replica coordination.
+
+Scaling is a phased journey: upgrade the box, then separate concerns, then partition across instances.
+
+#### 14.1 Phase 1 — Vertical Scaling (First Move)
+
+The fastest path to handling more concurrent users and heavier tool execution loads. Upgrade the VPS and adjust resource limits to match.
+
+**Recommended server tiers:**
+
+| Tier | Spec | Use Case |
+|------|------|----------|
+| **Starter** (current) | 4 vCPU, 8 GB RAM, 150 GB SSD | 1-3 concurrent users, light tool use |
+| **Growth** | 8 vCPU, 16 GB RAM, 300 GB SSD | 5-10 concurrent users, moderate tool + sandbox use |
+| **Production** | 16 vCPU, 32 GB RAM, 500 GB NVMe | 10-25 concurrent users, heavy sandbox + memory/RAG |
+
+After upgrading the server, update `docker-compose.yml` resource limits:
+
+```bash
+# Growth tier example — adjust to your actual spec
+cat > /tmp/compose-patch.yml << 'EOF'
+services:
+  openclaw:
+    deploy:
+      resources:
+        limits:
+          cpus: "6.0"
+          memory: 10G
+        reservations:
+          memory: 4G
+  openclaw-egress:
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+  docker-proxy:
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+EOF
+
+# Apply: edit /opt/openclaw/docker-compose.yml with the new limits, then:
+cd /opt/openclaw && docker compose up -d
+```
+
+Update sandbox resource caps to take advantage of the larger host:
+
+```bash
+docker exec -it openclaw sh
+
+# Allow sandbox containers more headroom on a bigger box
+openclaw config set agents.defaults.sandbox.docker.memoryLimit "1g"
+openclaw config set agents.defaults.sandbox.docker.cpuLimit "1.0"
+openclaw config set agents.defaults.sandbox.docker.pidsLimit 512
+
+exit
+docker compose restart openclaw
+```
+
+Update system tuning for higher connection counts:
+
+```bash
+cat > /etc/sysctl.d/99-openclaw.conf << 'EOF'
+vm.swappiness = 10
+fs.inotify.max_user_watches = 524288
+fs.inotify.max_user_instances = 1024
+net.core.somaxconn = 4096
+net.ipv4.tcp_max_syn_backlog = 4096
+EOF
+
+sysctl --system
+```
+
+#### 14.2 Phase 2 — Separation of Concerns
+
+Before scaling OpenClaw itself, offload supporting services to reduce contention on the Gateway process.
+
+**Add a LiteLLM model proxy** between OpenClaw and LLM providers:
+
+```
+openclaw ──► LiteLLM ──► Squid egress ──► LLM APIs
+```
+
+LiteLLM adds: per-model rate limiting, cost controls, request filtering, centralized API key management (keys never touch OpenClaw), audit logging, and provider fallback routing.
+
+```bash
+cat >> /opt/openclaw/docker-compose.yml << 'LITELLM_EOF'
+
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    container_name: openclaw-litellm
+    volumes:
+      - ./config/litellm-config.yaml:/app/config.yaml:ro
+    environment:
+      LITELLM_MASTER_KEY: "${LITELLM_MASTER_KEY}"
+      HTTP_PROXY: http://openclaw-egress:3128
+      HTTPS_PROXY: http://openclaw-egress:3128
+    networks:
+      - openclaw-net
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+    restart: unless-stopped
+LITELLM_EOF
+```
+
+Create the LiteLLM config:
+
+```bash
+cat > /opt/openclaw/config/litellm-config.yaml << 'EOF'
+model_list:
+  - model_name: "anthropic/claude-opus-4-6"
+    litellm_params:
+      model: "claude-opus-4-6"
+      api_key: "os.environ/ANTHROPIC_API_KEY"
+      max_budget: 100.0        # USD per month
+      rpm: 60                  # requests per minute
+  - model_name: "anthropic/claude-sonnet-4-5-20250929"
+    litellm_params:
+      model: "claude-sonnet-4-5-20250929"
+      api_key: "os.environ/ANTHROPIC_API_KEY"
+      max_budget: 50.0
+      rpm: 120
+
+general_settings:
+  master_key: "os.environ/LITELLM_MASTER_KEY"
+  alerting: ["log"]
+EOF
+```
+
+Then reconfigure OpenClaw to route through LiteLLM instead of directly to providers:
+
+```bash
+docker exec -it openclaw sh
+
+# Point OpenClaw at LiteLLM instead of direct provider APIs
+openclaw config set agents.defaults.apiBase "http://openclaw-litellm:4000"
+
+exit
+docker compose up -d && docker compose restart openclaw
+```
+
+> **Why LiteLLM first?** LLM API calls are the primary cost driver and the most variable load. Centralizing them gives you rate limiting, spend caps, and audit logging before you scale anything else. Without this, scaling OpenClaw just scales your API bill.
+
+**Externalize backups to object storage** (reduces local disk pressure):
+
+```bash
+# Add to /opt/openclaw/monitoring/backup.sh, inside the flock block:
+# Backblaze B2 (~$3/month for 500 GB):
+#   b2 sync /opt/openclaw/monitoring/backups/ b2://your-bucket/openclaw-backups/
+# AWS S3:
+#   aws s3 sync /opt/openclaw/monitoring/backups/ s3://your-bucket/openclaw-backups/
+```
+
+#### 14.3 Phase 3 — Multi-Instance with Channel Partitioning
+
+OpenClaw's Gateway is a singleton per channel connection — a Discord bot token can only have one active WebSocket. This means you cannot run two replicas behind a load balancer and have them both serve the same Discord bot.
+
+The scaling pattern is **channel partitioning**: each OpenClaw instance owns a distinct set of channels.
+
+```
+                    ┌──────────────────────────────────┐
+                    │         Cloudflare (WAF + CDN)    │
+                    └──────────────┬───────────────────┘
+                                   │
+                    ┌──────────────▼───────────────────┐
+                    │     Caddy (reverse proxy)         │
+                    │  path-based routing + sticky sess  │
+                    └──┬───────────────────────────┬───┘
+                       │                           │
+          ┌────────────▼──────────┐   ┌────────────▼──────────┐
+          │   openclaw-primary    │   │   openclaw-secondary   │
+          │   Discord + WhatsApp  │   │   Telegram + Signal    │
+          │   Web UI (sticky)     │   │   Slack                │
+          └───────────┬───────────┘   └───────────┬────────────┘
+                      │                           │
+          ┌───────────▼───────────────────────────▼───┐
+          │           Shared infrastructure            │
+          │  docker-proxy, openclaw-egress, litellm    │
+          └────────────────────────────────────────────┘
+```
+
+**Implementation:**
+
+1. Create a second OpenClaw data volume and service:
+
+```bash
+# Add to /opt/openclaw/docker-compose.yml:
+cat >> /opt/openclaw/docker-compose.yml << 'SECONDARY_EOF'
+
+  openclaw-secondary:
+    image: openclaw/openclaw:2026.2.15
+    container_name: openclaw-secondary
+    environment:
+      DOCKER_HOST: tcp://openclaw-docker-proxy:2375
+      HTTP_PROXY: http://openclaw-egress:3128
+      HTTPS_PROXY: http://openclaw-egress:3128
+      NO_PROXY: openclaw-docker-proxy,openclaw-litellm,localhost,127.0.0.1
+      OPENCLAW_DISABLE_BONJOUR: "1"
+    volumes:
+      - openclaw-data-secondary:/root/.openclaw
+    networks:
+      - openclaw-net
+      - proxy-net
+    depends_on:
+      docker-proxy:
+        condition: service_healthy
+      openclaw-egress:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "openclaw", "doctor", "--quiet"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 4G
+        reservations:
+          memory: 2G
+    restart: unless-stopped
+SECONDARY_EOF
+
+# Add the secondary data volume:
+# Under the volumes: key in docker-compose.yml, add:
+#   openclaw-data-secondary:
+```
+
+2. Apply the same hardening to the secondary instance (repeat Step 5 targeting `openclaw-secondary`).
+
+3. Configure each instance with its own channels:
+
+```bash
+# Primary: Discord + WhatsApp
+docker exec -it openclaw sh
+openclaw config set channels.discord.token "YOUR_DISCORD_BOT_TOKEN"
+openclaw onboard --channel whatsapp
+exit
+
+# Secondary: Telegram + Signal
+docker exec -it openclaw-secondary sh
+openclaw config set channels.telegram.token "YOUR_TELEGRAM_BOT_TOKEN"
+openclaw onboard --channel signal
+exit
+```
+
+4. Update Caddy for path-based routing with sticky sessions:
+
+```
+openclaw.yourdomain.com {
+    # Primary instance — default route + Web UI
+    handle /api/* {
+        reverse_proxy openclaw:3000 {
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # Secondary instance — separate API namespace
+    handle /secondary/api/* {
+        uri strip_prefix /secondary
+        reverse_proxy openclaw-secondary:3000 {
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # Default: primary Web UI
+    reverse_proxy openclaw:3000
+}
+```
+
+> **State isolation**: Each instance has its own data volume, memory index, session transcripts, and SOUL.md. Users on Discord see a different conversation history than users on Telegram. If you need shared memory across instances, you would need to externalize the vector store (PostgreSQL + pgvector, or a hosted vector DB) — OpenClaw does not natively support this yet.
+
+#### 14.4 Phase 4 — Docker Swarm Migration
+
+When you outgrow a single host entirely — because you need node-level fault tolerance, encrypted overlay networks, or CapRover's orchestration dashboard — migrate to the Swarm architecture documented in [SWARM.md](SWARM.md).
+
+Key differences from the single-server deployment:
+
+| Concern | Single-Server (This Guide) | Swarm (SWARM.md) |
+|---------|---------------------------|-------------------|
+| Orchestration | Docker Compose v2 | CapRover on Docker Swarm |
+| Network | Bridge (internal) | Encrypted overlay (IPSEC) |
+| Service discovery | Container names | `srv-captain--<name>` DNS |
+| Placement | Implicit (one host) | Explicit constraints (`openclaw.trusted=true`) |
+| Resource limits | `deploy` block in Compose | Service Update Overrides (JSON) |
+| Secrets | File-based (`.env`) | Docker Swarm secrets |
+| HA/DR | Manual (Step 13) | Standby node failover (SWARM.md §14) |
+| NFS | Not needed | Required for CapRover HA |
+
+**Migration path:**
+
+1. Provision the Swarm nodes (SWARM.md Steps 1-6)
+2. Back up the current `openclaw-data` volume (Step 11 of this guide)
+3. Deploy services to Swarm (SWARM.md Steps 7-9)
+4. Restore the data volume to the Swarm's `openclaw-data` volume
+5. Apply Service Update Overrides (SWARM.md Step 10.1)
+6. Re-apply hardening and channel config (SWARM.md Steps 10.2-10.5)
+7. Update Cloudflare DNS to the Swarm leader's IP
+8. Decommission the single server
+
+> **Important**: The Swarm deployment also pins all services to one trusted node. Swarm adds fault tolerance (automatic rescheduling if the trusted node fails) and encrypted inter-node traffic, but does not add horizontal compute capacity for the OpenClaw Gateway itself. True horizontal scaling still requires channel partitioning (Phase 3) within the Swarm.
+
+#### 14.5 Scaling Decision Matrix
+
+| Signal | Action |
+|--------|--------|
+| Response times increasing, sandbox queuing | Phase 1: Upgrade VPS |
+| LLM API costs unpredictable or growing fast | Phase 2: Add LiteLLM proxy |
+| More than 3 channels active | Phase 3: Channel partitioning |
+| Need node-level fault tolerance | Phase 4: Swarm migration |
+| Need zero-downtime deployments | Phase 4: Swarm with rolling updates |
+| Need per-user data isolation (compliance) | Phase 3: Separate instances per tenant |
+
 ---
 
-**Done.** Deploy with `docker compose up -d` (Step 4), apply hardening (Step 5), configure API keys and channels (Steps 6-7), set up your reverse proxy (Step 9), verify (Step 10), then configure backups (Step 11).
+**Done.** Deploy with `docker compose up -d` (Step 4), apply hardening (Step 5), configure API keys and channels (Steps 6-7), set up your reverse proxy (Step 9), verify (Step 10), then configure backups (Step 11). When you hit capacity limits, follow the scaling phases in Step 14.
