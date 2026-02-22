@@ -13,7 +13,7 @@ This repository is the **OpenClaw Hardened Single-Server Deployment** guide — 
 ## Repository Structure
 
 ```
-captainclaw/
+clincher/
 ├── CLAUDE.md                    # This file — project context + style guide for AI assistants
 ├── README.md                    # Primary artifact: 14-step deployment guide + Ansible docs
 ├── README_SERVER_SETUP.md       # Server setup and hardening reference (Steps 1-5, 10)
