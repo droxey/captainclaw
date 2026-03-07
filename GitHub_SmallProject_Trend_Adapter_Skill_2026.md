@@ -56,18 +56,18 @@ Deployment target: Single Ubuntu 24.04 VPS (KVM)
 
 ## Universal Transformation Checklist (12 high-impact steps)
 
-- [ ] **1. Hero visual** — Add architecture diagram or terminal recording (asciinema/GIF) showing `ansible-playbook playbook.yml` completing a full deploy in one shot
-- [ ] **2. One-liner install** — Add a single `curl | sh` or `ansible-pull` command that bootstraps the entire deployment from zero
-- [ ] **3. Problem statement** — Open README with the painful problem: "Deploying a hardened AI agent on a VPS takes hours of manual config. This does it in one command."
-- [ ] **4. Slim badge row** — Add 4–5 badges max: CI status, Ansible version, license, OpenClaw version, last commit
-- [ ] **5. Quick start above fold** — Move the 3-command quick start (`git clone`, `cp vault`, `ansible-playbook`) above the table of contents
-- [ ] **6. Flatten structure** — Keep top-level items under 15; consolidate prompt files into a `prompts/` directory
-- [ ] **7. Star History chart** — Add Star History embed in README footer for social proof
-- [ ] **8. Security audit one-liner** — Surface the `openclaw security audit --deep` command prominently as a trust signal
-- [ ] **9. Minimal badges** — Replace wall-of-text description with badges + 1-sentence pitch
-- [ ] **10. Contributing fast-path** — Add `make lint` or equivalent one-liner for contributors
-- [ ] **11. Topics/tags** — Set GitHub repo topics: `openclaw`, `ansible`, `docker-compose`, `self-hosted`, `security-hardening`, `vps-deployment`, `ai-agent`
-- [ ] **12. Social links** — Add community link (Discord/Telegram) in README header for discoverability
+- [x] **1. Hero visual** — ASCII architecture diagram above fold; centered title + badges + nav links
+- [x] **2. One-liner install** — `ansible-pull` one-command deploy option added to Quick Start
+- [x] **3. Problem statement** — "The Problem" section opens README after hero
+- [x] **4. Slim badge row** — 5 badges: CI, Ansible 2.17+, OpenClaw 2026.2, License, Stars
+- [x] **5. Quick start above fold** — 3-command quick start above Table of Contents
+- [x] **6. Flatten structure** — Prompt files consolidated in `prompts/`; manual guide collapsed in `<details>`
+- [x] **7. Star History chart** — Dark/light theme chart in README footer
+- [x] **8. Security audit one-liner** — Security section with `openclaw security audit --deep` near top of README
+- [x] **9. Minimal badges** — 1-sentence pitch + 5 badges in centered hero section
+- [x] **10. Contributing fast-path** — `make help` / `make check` documented in contributor quick start
+- [ ] **11. Topics/tags** — Set GitHub repo topics: `openclaw`, `ansible`, `docker-compose`, `self-hosted`, `security-hardening`, `vps-deployment`, `ai-agent` *(requires GitHub UI)*
+- [ ] **12. Social links** — Add community link (Discord/Telegram) in README header for discoverability *(pending community channel setup)*
 
 ---
 
@@ -596,24 +596,26 @@ When an agent loads this skill, execute these steps in order:
 
 | Item | Before | After |
 |------|:------:|:-----:|
-| Hero visual above fold | ❌ | ☐ |
-| One-command deploy | ❌ | ☐ |
-| Problem statement in first 3 lines | ❌ | ☐ |
-| Badge row | ❌ | ☐ |
-| Quick start above ToC | ❌ | ☐ |
-| Makefile | ❌ | ☐ |
-| Star History chart | ❌ | ☐ |
-| Issue templates | ❌ | ☐ |
-| PR template | ❌ | ☐ |
-| Dependabot config | ❌ | ☐ |
-| GitHub topics set | ❌ | ☐ |
-| Architecture diagram (clean) | Partial (ASCII in README) | ☐ |
-| prompts/ directory | ❌ (files at root) | ☐ |
-| LICENSE file at root | ❌ | ☐ |
-| Security audit prominent | Partial (buried in Step 10) | ☐ |
+| Hero visual above fold | ❌ | ✅ Centered title + badges + nav links |
+| One-command deploy | ❌ | ✅ Quick Start + ansible-pull one-liner |
+| Problem statement in first 3 lines | ❌ | ✅ "The Problem" section |
+| Badge row | ❌ | ✅ CI, Ansible, OpenClaw, License, Stars |
+| Quick start above ToC | ❌ | ✅ |
+| Makefile | ❌ | ✅ lint, test, deploy, verify, check, help |
+| Star History chart | ❌ | ✅ Footer with dark/light theme |
+| Issue templates | ❌ | ✅ bug_report.yml + feature_request.yml |
+| PR template | ❌ | ✅ What/Why/Testing/Security checklist |
+| Dependabot config | ❌ | ✅ github-actions + pip |
+| GitHub topics set | ❌ | ☐ Set via GitHub UI |
+| Architecture diagram (clean) | Partial (ASCII in README) | ✅ ASCII diagram in hero section |
+| prompts/ directory | ❌ (files at root) | ✅ prompts/*.prompt.md |
+| LICENSE file at root | ❌ | ✅ MIT |
+| Security audit prominent | Partial (buried in Step 10) | ✅ Security section near top with audit command |
+| Manual guide collapsible | ❌ (inline) | ✅ Wrapped in &lt;details&gt; |
+| .gitignore comprehensive | Partial | ✅ vault, retry, molecule, pycache, env, venv, logs |
 | CLAUDE.md | ✅ | ✅ |
 | Molecule tests | ✅ | ✅ |
 | CI workflow | ✅ | ✅ |
 | Ansible-lint config | ✅ | ✅ |
 
-**Current estimated score (baseline, before applying this skill): 4/10** — solid infrastructure code and security model, but poor discoverability packaging. The 14-step guide is thorough but buries the value proposition. Applying this skill should bring the score to 8+/10.
+**Updated estimated score: 8/10** — hero section with badges and problem statement, one-command quick start above fold, security audit prominent, Star History chart, full GitHub Power Pack (issue templates, PR template, dependabot), Makefile DX, collapsible manual guide. Remaining gap: terminal demo GIF for hero visual (requires live deployment recording).

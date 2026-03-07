@@ -48,6 +48,19 @@ ansible-playbook playbook.yml -i inventory/hosts.yml --ask-vault-pass
 
 **That's it.** Firewall, egress proxy, socket isolation, sandbox hardening, channel integration, reverse proxy, monitoring, and backups — all configured and running.
 
+<details>
+<summary><strong>Alternative: one-command deploy from any machine</strong></summary>
+
+```bash
+# Pull and run the playbook directly — no manual clone needed
+ansible-pull -U https://github.com/droxey/clincher.git playbook.yml \
+  -i inventory/hosts.yml --ask-vault-pass
+```
+
+> Requires Ansible on the control node and a pre-configured `vault.yml` on the target host.
+
+</details>
+
 > **Contributor quick start**: `make help` to see all available targets. `make check` runs the full CI suite locally.
 
 ---
@@ -98,7 +111,7 @@ Three bridge networks enforce least-privilege communication. `openclaw-net` is *
 ## Table of Contents
 
 - [Automated Deployment (Ansible)](#automated-deployment-ansible)
-- [Manual Deployment (Steps 1-14)](#step-1-prerequisites)
+- [Manual Deployment (Steps 1-14)](#manual-deployment-steps-114) *(collapsible)*
   - [Step 1: Prerequisites](#step-1-prerequisites)
   - [Step 2: Configure Firewall](#step-2-configure-firewall)
   - [Step 3: Create Configuration Files](#step-3-create-configuration-files)
@@ -289,7 +302,8 @@ This regenerates the Compose file with the new image, pulls it, restarts the sta
 
 ---
 
-## Manual Deployment
+<details>
+<summary><h2>Manual Deployment (Steps 1–14)</h2></summary>
 
 > The steps below are the manual equivalent of the Ansible playbook above. If you used `ansible-playbook` to deploy, skip to [Step 12: Troubleshooting](#step-12-troubleshooting) or [Step 14: Scaling](#step-14-scaling) for reference material not covered by automation.
 
@@ -2710,6 +2724,8 @@ openclaw.yourdomain.com {
 | LLM API costs unpredictable or growing fast | Phase 2: Tune LiteLLM spend caps and routing |
 | Need separate bots for different user groups | Phase 3: Telegram bot partitioning |
 | Need per-user data isolation (compliance) | Phase 3: Separate instances per tenant |
+
+</details>
 
 ---
 
