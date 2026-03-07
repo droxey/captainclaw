@@ -29,8 +29,7 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: |
-          pip install ansible ansible-lint yamllint
+        run: pip install -r requirements.txt
 
       - name: Install Ansible collections
         run: ansible-galaxy collection install -r requirements.yml
@@ -55,7 +54,7 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install ansible
+        run: pip install -r requirements.txt
 
       - name: Install Ansible collections
         run: ansible-galaxy collection install -r requirements.yml
@@ -88,8 +87,7 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: |
-          pip install ansible molecule molecule-plugins[docker]
+        run: pip install -r requirements.txt
 
       - name: Install Ansible collections
         run: ansible-galaxy collection install -r requirements.yml
