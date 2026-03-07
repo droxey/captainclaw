@@ -824,9 +824,16 @@ COMPOSE_EOF
 
 > **2026 supply chain best practice**: Verify container provenance before first run. Pull images, record their digests, and (if signatures are published) verify them with Sigstore:
 > ```bash
-> docker pull ghcr.io/openclaw/openclaw:2026.2.23 ghcr.io/berriai/litellm:main-v1.81.3-stable ghcr.io/tecnativa/docker-socket-proxy:v0.4.2 redis/redis-stack-server:7.4.0-v3
-> docker buildx imagetools inspect ghcr.io/openclaw/openclaw:2026.2.23 | grep Digest
-> # Optional: cosign verify ghcr.io/openclaw/openclaw:2026.2.23
+> for img in \
+>   ghcr.io/openclaw/openclaw:2026.2.23 \
+>   ghcr.io/berriai/litellm:main-v1.81.3-stable \
+>   ghcr.io/tecnativa/docker-socket-proxy:v0.4.2 \
+>   redis/redis-stack-server:7.4.0-v3; do
+>   docker pull "$img"
+>   echo "$img:"
+>   docker buildx imagetools inspect "$img" | grep Digest
+>   # Optional: cosign verify "$img"
+> done
 > ```
 > Append the verified digests (e.g., `ghcr.io/openclaw/openclaw:2026.2.23@sha256:<digest>`) to your Compose file to lock deployments to the vetted artifacts, then proceed with the steps below.
 
