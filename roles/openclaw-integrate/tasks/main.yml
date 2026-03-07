@@ -49,7 +49,8 @@
 # ── Step 7: Channel Integration (Telegram) ───────────────────────────
 - name: Configure Telegram channel
   when: telegram_enabled | bool
-  block:    - name: Create Telegram bot token tempfile
+  block:
+    - name: Create Telegram bot token tempfile
       ansible.builtin.tempfile:
         state: file
         suffix: ".telegram-token"
@@ -147,3 +148,4 @@
   ansible.builtin.command: docker compose restart openclaw
   args:
     chdir: "{{ openclaw_base_dir }}"
+  changed_when: true

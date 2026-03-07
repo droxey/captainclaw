@@ -23,7 +23,7 @@
     owner: root
     group: root
     mode: "0644"
-  notify: rebuild egress
+  notify: Rebuild egress
 
 - name: Deploy Smokescreen Dockerfile
   ansible.builtin.template:
@@ -32,7 +32,7 @@
     owner: root
     group: root
     mode: "0644"
-  notify: rebuild egress
+  notify: Rebuild egress
 
 - name: Deploy Smokescreen custom main.go
   ansible.builtin.copy:
@@ -41,7 +41,7 @@
     owner: root
     group: root
     mode: "0644"
-  notify: rebuild egress
+  notify: Rebuild egress
 
 - name: Deploy Smokescreen egress ACL
   ansible.builtin.template:
@@ -50,7 +50,7 @@
     owner: root
     group: root
     mode: "0644"
-  notify: restart egress
+  notify: Restart egress
 
 - name: Deploy LiteLLM config
   ansible.builtin.template:
@@ -59,7 +59,7 @@
     owner: root
     group: root
     mode: "0644"
-  notify: restart litellm
+  notify: Restart litellm
 
 - name: Deploy Docker Compose file
   ansible.builtin.template:

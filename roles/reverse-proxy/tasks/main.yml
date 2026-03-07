@@ -39,6 +39,7 @@
         up -d
       args:
         chdir: "{{ openclaw_base_dir }}"
+      changed_when: true
 
 # ── Option B: Cloudflare Tunnel ───────────────────────────────────────
 - name: Deploy Cloudflare Tunnel
@@ -64,6 +65,7 @@
         up -d
       args:
         chdir: "{{ openclaw_base_dir }}"
+      changed_when: true
 
     - name: Remind operator to configure tunnel route in Cloudflare dashboard
       ansible.builtin.debug:
@@ -88,6 +90,7 @@
       ansible.builtin.command: docker compose restart openclaw
       args:
         chdir: "{{ openclaw_base_dir }}"
+      changed_when: true
 
     - name: Show Tailscale serve status
       ansible.builtin.command: tailscale serve status
