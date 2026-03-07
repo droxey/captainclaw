@@ -446,7 +446,7 @@ Add to README:
 
 ```bash
 # One-command deploy (requires Ansible on control node)
-ansible-pull -U https://github.com/USER/clincher.git playbook.yml \
+ansible-pull -U https://github.com/YOUR_USERNAME/clincher.git playbook.yml \
   -i inventory/hosts.yml --ask-vault-pass
 ```
 
@@ -616,4 +616,4 @@ When an agent loads this skill, execute these steps in order:
 | CI workflow | ✅ | ✅ |
 | Ansible-lint config | ✅ | ✅ |
 
-**Current estimated score: 4/10** — solid infrastructure code and security model, but poor discoverability packaging. The 14-step guide is thorough but buries the value proposition. Applying this skill should bring the score to 8+/10.
+**Current estimated score (baseline, before applying this skill): 4/10** — solid infrastructure code and security model, but poor discoverability packaging. The 14-step guide is thorough but buries the value proposition. Applying this skill should bring the score to 8+/10.
