@@ -54,7 +54,7 @@
     owner: root
     group: root
     mode: "0644"
-  notify: reload ssh
+  notify: Reload ssh
 
 # ── Docker Installation ───────────────────────────────────────────────
 - name: Check if Docker is installed
@@ -63,10 +63,24 @@
   changed_when: false
   failed_when: false
 
+- name: Download Docker install script
+  ansible.builtin.get_url:
+    url: https://get.docker.com
+    dest: /tmp/get-docker.sh
+    mode: "0755"
+    timeout: 30
+  when: docker_check.rc != 0
+
 - name: Install Docker via official script
-  ansible.builtin.shell: curl -fsSL https://get.docker.com | sh
+  ansible.builtin.command: /tmp/get-docker.sh
   args:
     creates: /usr/bin/docker
+  when: docker_check.rc != 0
+
+- name: Remove Docker install script
+  ansible.builtin.file:
+    path: /tmp/get-docker.sh
+    state: absent
   when: docker_check.rc != 0
 
 - name: Add deploy user to docker group
@@ -94,7 +108,7 @@
     owner: root
     group: root
     mode: "0644"
-  notify: restart docker
+  notify: Restart docker
 
 # ── System Tuning ─────────────────────────────────────────────────────
 - name: Deploy sysctl tuning
@@ -104,7 +118,7 @@
     owner: root
     group: root
     mode: "0644"
-  notify: reload sysctl
+  notify: Reload sysctl
 
 # ── Firewall ──────────────────────────────────────────────────────────
 - name: Install UFW and fail2ban
@@ -140,7 +154,7 @@
     owner: root
     group: root
     mode: "0644"
-  notify: restart fail2ban
+  notify: Restart fail2ban
 
 - name: Fetch Cloudflare IPv4 ranges
   ansible.builtin.uri:
@@ -189,10 +203,22 @@
 - name: Install Tailscale
   when: tailscale_enabled | bool
   block:
+    - name: Download Tailscale install script
+      ansible.builtin.get_url:
+        url: https://tailscale.com/install.sh
+        dest: /tmp/install-tailscale.sh
+        mode: "0755"
+        timeout: 30
+
     - name: Run Tailscale install script
-      ansible.builtin.shell: curl -fsSL https://tailscale.com/install.sh | sh
+      ansible.builtin.command: /tmp/install-tailscale.sh
       args:
         creates: /usr/bin/tailscale
+
+    - name: Remove Tailscale install script
+      ansible.builtin.file:
+        path: /tmp/install-tailscale.sh
+        state: absent
 
     - name: Allow SSH from Tailscale CGNAT range
       community.general.ufw:
@@ -221,7 +247,7 @@
     path: /etc/default/ufw
     regexp: "^IPV6="
     line: "IPV6=no"
-  notify: reload ufw
+  notify: Reload ufw
   when: disable_ipv6 | bool
 
 # ── Flush handlers to apply Docker restart before later roles ─────────

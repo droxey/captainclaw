@@ -1,0 +1,21 @@
+---
+# Ansible-lint configuration for Clincher
+# https://ansible.readthedocs.io/projects/lint/configuring/
+
+profile: production
+
+# Skip rules that would require invasive renaming across all roles
+skip_list:
+  # Register variables don't need role prefixes in a single-playbook project
+  - var-naming[no-role-prefix]
+
+# Exclude paths that aren't part of the playbook
+exclude_paths:
+  - .github/
+  - molecule/
+
+# Treat warnings as errors in CI
+strict: true
+
+# Enable offline mode for CI (no Galaxy downloads during lint)
+offline: false
