@@ -31,6 +31,8 @@ Download a single prompt directly:
 curl -O https://raw.githubusercontent.com/droxey/clincher/main/prompts/humanizer.prompt.md
 ```
 
+Review the file contents before use — prompts influence code generation and should be treated like code.
+
 ### Option 3 — Reference via URL
 
 Most agents accept a URL or pasted content. Use the raw GitHub URL:
