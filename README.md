@@ -57,7 +57,7 @@ ansible-pull -U https://github.com/droxey/clincher.git playbook.yml \
   -i inventory/hosts.yml --ask-vault-pass
 ```
 
-> Requires Ansible on the control node and a pre-configured `vault.yml` on the target host.
+> Requires Ansible installed on the target server. The repository's `group_vars/all/vault.yml` must be configured before running.
 
 </details>
 
@@ -111,7 +111,7 @@ Three bridge networks enforce least-privilege communication. `openclaw-net` is *
 ## Table of Contents
 
 - [Automated Deployment (Ansible)](#automated-deployment-ansible)
-- [Manual Deployment (Steps 1-14)](#manual-deployment-steps-114) *(collapsible)*
+- [Manual Deployment (Steps 1-14)](#manual-deployment) *(collapsible)*
   - [Step 1: Prerequisites](#step-1-prerequisites)
   - [Step 2: Configure Firewall](#step-2-configure-firewall)
   - [Step 3: Create Configuration Files](#step-3-create-configuration-files)
@@ -302,8 +302,8 @@ This regenerates the Compose file with the new image, pulls it, restarts the sta
 
 ---
 
-<details>
-<summary><h2>Manual Deployment (Steps 1–14)</h2></summary>
+<details id="manual-deployment">
+<summary><strong>Manual Deployment (Steps 1–14)</strong></summary>
 
 > The steps below are the manual equivalent of the Ansible playbook above. If you used `ansible-playbook` to deploy, skip to [Step 12: Troubleshooting](#step-12-troubleshooting) or [Step 14: Scaling](#step-14-scaling) for reference material not covered by automation.
 

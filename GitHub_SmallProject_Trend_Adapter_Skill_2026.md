@@ -611,7 +611,7 @@ When an agent loads this skill, execute these steps in order:
 | prompts/ directory | ❌ (files at root) | ✅ prompts/*.prompt.md |
 | LICENSE file at root | ❌ | ✅ MIT |
 | Security audit prominent | Partial (buried in Step 10) | ✅ Security section near top with audit command |
-| Manual guide collapsible | ❌ (inline) | ✅ Wrapped in &lt;details&gt; |
+| Manual guide collapsible | ❌ (inline) | ✅ Wrapped in collapsible details block |
 | .gitignore comprehensive | Partial | ✅ vault, retry, molecule, pycache, env, venv, logs |
 | CLAUDE.md | ✅ | ✅ |
 | Molecule tests | ✅ | ✅ |
