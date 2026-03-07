@@ -6,6 +6,7 @@ services:
     environment:
       TUNNEL_TOKEN: "${TUNNEL_TOKEN}"
     networks:
+      - ingress-net
       - proxy-net
       - ingress-net
     restart: unless-stopped

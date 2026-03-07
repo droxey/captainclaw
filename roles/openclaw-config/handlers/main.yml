@@ -5,7 +5,10 @@
     chdir: "{{ openclaw_base_dir }}"
 
 - name: restart egress
-  ansible.builtin.command: docker compose restart openclaw-egress
+  ansible.builtin.shell: |
+    if docker ps -a --format '{{ '{{' }}.Names{{ '}}' }}' | grep -q openclaw-egress; then
+      docker compose restart openclaw-egress
+    fi
   args:
     chdir: "{{ openclaw_base_dir }}"
   failed_when: false

@@ -11,6 +11,12 @@
     mode: "0600"
   no_log: true
 
+# ── Pre-pull Images ──────────────────────────────────────────────────
+- name: Pull Alpine image for backup jobs
+  community.docker.docker_image:
+    name: "alpine:3.21"
+    source: pull
+
 # ── Maintenance Scripts ───────────────────────────────────────────────
 - name: Deploy backup script
   ansible.builtin.template:
