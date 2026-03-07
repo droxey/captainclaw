@@ -1,0 +1,125 @@
+---
+# Converge playbook for openclaw-config role
+# Renders all templates to a temporary directory without requiring Docker.
+- name: Test openclaw-config role template rendering
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  become: false
+
+  vars:
+    # Use a temp directory so we don't need root or /opt
+    openclaw_base_dir: /tmp/molecule-openclaw-config
+
+    # Image versions
+    openclaw_version: "2026.2.23"
+    docker_proxy_version: "v0.4.2"
+    smokescreen_commit: "v0.0.4"
+    smokescreen_go_version: "1.22"
+    smokescreen_alpine_version: "3.20"
+    litellm_version: "main-v1.81.3-stable"
+    redis_version: "7.4.0-v3"
+
+    # Secrets (test values)
+    litellm_master_key: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    anthropic_api_key: "sk-ant-test-key-for-molecule"
+    voyage_api_key: "pa-test-key-for-molecule"
+    monitoring_enabled: false
+
+    # Egress whitelist
+    egress_allowed_domains:
+      - "*.anthropic.com"
+      - "*.openai.com"
+      - "*.voyageai.com"
+
+    # Container resources
+    openclaw_cpus: "8.0"
+    openclaw_memory: "16G"
+    openclaw_memory_reservation: "4G"
+    docker_proxy_cpus: "0.5"
+    docker_proxy_memory: "256M"
+    smokescreen_cpus: "0.5"
+    smokescreen_memory: "128M"
+    litellm_cpus: "2.0"
+    litellm_memory: "2G"
+    redis_cpus: "0.5"
+    redis_memory: "512M"
+    redis_maxmemory: "256mb"
+
+    # LiteLLM models
+    litellm_models:
+      - name: "anthropic/claude-opus-4-6"
+        model: "claude-opus-4-6"
+        key_env: "ANTHROPIC_API_KEY"
+        max_budget: 100.0
+        rpm: 60
+
+    litellm_cache_ttl: 3600
+    litellm_similarity_threshold: 0.8
+
+    # Docker socket proxy
+    docker_dns:
+      - "1.1.1.1"
+      - "8.8.8.8"
+
+    # OpenClaw hardening
+    openclaw_agent_tool_denials:
+      - process
+      - browser
+    openclaw_gateway_tool_denials:
+      - process
+      - browser
+
+    domain: "test.example.com"
+    reverse_proxy: "caddy"
+
+  tasks:
+    - name: Create OpenClaw directory tree
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0700"
+      loop:
+        - "{{ openclaw_base_dir }}"
+        - "{{ openclaw_base_dir }}/config"
+        - "{{ openclaw_base_dir }}/build/smokescreen"
+        - "{{ openclaw_base_dir }}/monitoring"
+        - "{{ openclaw_base_dir }}/monitoring/logs"
+        - "{{ openclaw_base_dir }}/monitoring/backups"
+
+    - name: Deploy Smokescreen custom main.go
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../files/main.smokescreen.go"
+        dest: "{{ openclaw_base_dir }}/build/smokescreen/main.go"
+        mode: "0644"
+
+    - name: Deploy Smokescreen Dockerfile
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../../templates/Dockerfile.smokescreen.j2"
+        dest: "{{ openclaw_base_dir }}/build/smokescreen/Dockerfile"
+        mode: "0644"
+
+    - name: Deploy Smokescreen egress ACL
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../../templates/smokescreen-acl.yaml.j2"
+        dest: "{{ openclaw_base_dir }}/config/smokescreen-acl.yaml"
+        mode: "0644"
+
+    - name: Deploy LiteLLM config
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../../templates/litellm-config.yaml.j2"
+        dest: "{{ openclaw_base_dir }}/config/litellm-config.yaml"
+        mode: "0644"
+
+    - name: Deploy Docker Compose file
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../../templates/docker-compose.yml.j2"
+        dest: "{{ openclaw_base_dir }}/docker-compose.yml"
+        mode: "0644"
+
+    - name: Deploy .env file with secrets
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../../templates/env.j2"
+        dest: "{{ openclaw_base_dir }}/.env"
+        mode: "0600"
+      no_log: true

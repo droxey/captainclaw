@@ -1,0 +1,82 @@
+---
+# Verify maintenance role outputs
+- name: Verify maintenance template rendering
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+
+  vars:
+    openclaw_base_dir: /tmp/molecule-maintenance
+
+  tasks:
+    - name: Check rendered scripts exist
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: script_checks
+      loop:
+        - "{{ openclaw_base_dir }}/monitoring/backup.sh"
+        - "{{ openclaw_base_dir }}/monitoring/rotate-token.sh"
+        - "{{ openclaw_base_dir }}/monitoring/watchdog.sh"
+        - "{{ openclaw_base_dir }}/monitoring/verify-backup.sh"
+
+    - name: Assert scripts exist
+      ansible.builtin.assert:
+        that: item.stat.exists
+        fail_msg: "Script {{ item.item }} was not created"
+      loop: "{{ script_checks.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Check scripts are executable
+      ansible.builtin.assert:
+        that: item.stat.mode == '0700'
+        fail_msg: "Script {{ item.item }} should be mode 0700, got {{ item.stat.mode }}"
+      loop: "{{ script_checks.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Read backup script
+      ansible.builtin.slurp:
+        src: "{{ openclaw_base_dir }}/monitoring/backup.sh"
+      register: backup_script
+
+    - name: Verify backup script contains expected content
+      ansible.builtin.assert:
+        that:
+          - "'set -euo pipefail' in (backup_script.content | b64decode)"
+          - "'flock' in (backup_script.content | b64decode)"
+        fail_msg: "backup.sh is missing expected content (set -euo pipefail or flock)"
+
+    - name: Read watchdog script
+      ansible.builtin.slurp:
+        src: "{{ openclaw_base_dir }}/monitoring/watchdog.sh"
+      register: watchdog_script
+
+    - name: Verify watchdog script contains expected content
+      ansible.builtin.assert:
+        that:
+          - "'set -euo pipefail' in (watchdog_script.content | b64decode)"
+        fail_msg: "watchdog.sh is missing expected content"
+
+    - name: Check backup encryption key exists
+      ansible.builtin.stat:
+        path: "{{ openclaw_base_dir }}/monitoring/.backup-encryption-key"
+      register: key_stat
+
+    - name: Assert backup encryption key has restricted permissions
+      ansible.builtin.assert:
+        that:
+          - key_stat.stat.exists
+          - key_stat.stat.mode == '0600'
+        fail_msg: "Backup encryption key should exist with mode 0600"
+
+    - name: Check unattended-upgrades config exists
+      ansible.builtin.stat:
+        path: "{{ openclaw_base_dir }}/monitoring/50unattended-upgrades"
+      register: upgrades_stat
+
+    - name: Assert unattended-upgrades config exists
+      ansible.builtin.assert:
+        that: upgrades_stat.stat.exists
+        fail_msg: "50unattended-upgrades config was not created"

@@ -1,0 +1,86 @@
+---
+# Project-level converge: validates variable handling, secret generation,
+# and pre-flight assertions with test values that pass validation.
+- name: Test variable validation and secret generation
+  hosts: localhost
+  connection: local
+  gather_facts: true
+
+  vars:
+    # Provide valid test values so assertions pass
+    anthropic_api_key: "sk-ant-test-key-for-molecule"
+    voyage_api_key: "pa-test-key-for-molecule"
+    admin_ip: "203.0.113.10"
+    domain: "test.example.com"
+    reverse_proxy: "caddy"
+    litellm_master_key: ""
+    gateway_token: ""
+    backup_encryption_key: ""
+    deploy_user: deploy
+    ssh_port: 9922
+    local_ssh_key_path: "/tmp/molecule-test-key"
+    openclaw_base_dir: /opt/openclaw
+
+  tasks:
+    # ── Variable validation (mirrors playbook.yml pre_tasks) ──────────
+    - name: Ensure LLM provider API key is configured
+      ansible.builtin.assert:
+        that:
+          - anthropic_api_key is defined
+          - anthropic_api_key | length > 0
+          - anthropic_api_key != 'sk-ant-your-key-here'
+        fail_msg: "anthropic_api_key must be set in vault.yml (not the placeholder value)"
+
+    - name: Ensure Voyage API key is configured
+      ansible.builtin.assert:
+        that:
+          - voyage_api_key is defined
+          - voyage_api_key | length > 0
+          - voyage_api_key != 'pa-your-key-here'
+        fail_msg: "voyage_api_key must be set in vault.yml (not the placeholder value)"
+
+    - name: Ensure tunnel token is set when using Cloudflare Tunnel
+      ansible.builtin.assert:
+        that:
+          - tunnel_token is defined
+          - tunnel_token | length > 0
+          - tunnel_token != 'YOUR_TUNNEL_TOKEN'
+        fail_msg: "tunnel_token must be set in vault.yml when reverse_proxy is 'tunnel'"
+      when: reverse_proxy == 'tunnel'
+
+    - name: Ensure admin_ip is configured
+      ansible.builtin.assert:
+        that:
+          - admin_ip != 'YOUR_STATIC_IP'
+        fail_msg: "admin_ip must be set to your actual IP in vars.yml"
+
+    - name: Ensure domain is configured
+      ansible.builtin.assert:
+        that:
+          - domain != 'openclaw.yourdomain.com'
+        fail_msg: "domain must be set to your actual domain in vars.yml"
+
+    # ── Secret generation (mirrors playbook.yml pre_tasks) ────────────
+    - name: Generate LiteLLM master key
+      ansible.builtin.set_fact:
+        litellm_master_key: "{{ lookup('ansible.builtin.password', '/dev/null chars=hexdigits length=64') }}"
+      when: litellm_master_key | default('') | length == 0
+
+    - name: Generate gateway token
+      ansible.builtin.set_fact:
+        gateway_token: "{{ lookup('ansible.builtin.password', '/dev/null chars=hexdigits length=64') }}"
+      when: gateway_token | default('') | length == 0
+
+    - name: Generate backup encryption key
+      ansible.builtin.set_fact:
+        backup_encryption_key: "{{ lookup('ansible.builtin.password', '/dev/null chars=hexdigits length=64') }}"
+      when: backup_encryption_key | default('') | length == 0
+
+    # ── Verify secrets were generated ─────────────────────────────────
+    - name: Verify all secrets are populated
+      ansible.builtin.assert:
+        that:
+          - litellm_master_key | length == 64
+          - gateway_token | length == 64
+          - backup_encryption_key | length == 64
+        fail_msg: "Secret generation failed — one or more keys are empty or wrong length"

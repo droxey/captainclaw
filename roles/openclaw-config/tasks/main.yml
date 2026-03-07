@@ -16,15 +16,6 @@
     - "{{ openclaw_base_dir }}/monitoring/logs"
     - "{{ openclaw_base_dir }}/monitoring/backups"
 
-- name: Deploy Smokescreen custom main.go (non-TLS RoleFromRequest)
-  ansible.builtin.template:
-    src: smokescreen-main.go.j2
-    dest: "{{ openclaw_base_dir }}/build/smokescreen/main.go"
-    owner: root
-    group: root
-    mode: "0644"
-  notify: Rebuild egress
-
 - name: Deploy Smokescreen Dockerfile
   ansible.builtin.template:
     src: Dockerfile.smokescreen.j2

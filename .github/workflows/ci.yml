@@ -1,0 +1,108 @@
+---
+name: CI
+
+"on":
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install ansible ansible-lint yamllint
+
+      - name: Install Ansible collections
+        run: ansible-galaxy collection install -r requirements.yml
+
+      - name: Run yamllint
+        run: yamllint .
+
+      - name: Run ansible-lint
+        run: ansible-lint
+
+  syntax:
+    name: Syntax Check
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install ansible
+
+      - name: Install Ansible collections
+        run: ansible-galaxy collection install -r requirements.yml
+
+      - name: Run syntax check
+        run: ansible-playbook playbook.yml --syntax-check
+
+  molecule:
+    name: "Molecule (${{ matrix.scenario }})"
+    runs-on: ubuntu-24.04
+    needs: [lint, syntax]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - scenario: default
+            role: ""
+          - scenario: default
+            role: openclaw-config
+          - scenario: default
+            role: maintenance
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install ansible molecule molecule-plugins[docker]
+
+      - name: Install Ansible collections
+        run: ansible-galaxy collection install -r requirements.yml
+
+      - name: Run Molecule (project-level)
+        if: matrix.role == ''
+        run: molecule test
+        env:
+          ANSIBLE_FORCE_COLOR: "1"
+
+      - name: Run Molecule (role-level)
+        if: matrix.role != ''
+        run: molecule test
+        working-directory: "roles/${{ matrix.role }}"
+        env:
+          ANSIBLE_FORCE_COLOR: "1"

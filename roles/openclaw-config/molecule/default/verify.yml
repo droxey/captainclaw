@@ -1,0 +1,102 @@
+---
+# Verify openclaw-config role outputs
+- name: Verify openclaw-config template rendering
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+
+  vars:
+    openclaw_base_dir: /tmp/molecule-openclaw-config
+
+  tasks:
+    - name: Check directory tree exists
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: dir_checks
+      loop:
+        - "{{ openclaw_base_dir }}"
+        - "{{ openclaw_base_dir }}/config"
+        - "{{ openclaw_base_dir }}/build/smokescreen"
+        - "{{ openclaw_base_dir }}/monitoring"
+
+    - name: Assert directories exist
+      ansible.builtin.assert:
+        that: item.stat.isdir
+        fail_msg: "Directory {{ item.item }} does not exist"
+      loop: "{{ dir_checks.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Check rendered files exist
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: file_checks
+      loop:
+        - "{{ openclaw_base_dir }}/docker-compose.yml"
+        - "{{ openclaw_base_dir }}/.env"
+        - "{{ openclaw_base_dir }}/config/smokescreen-acl.yaml"
+        - "{{ openclaw_base_dir }}/config/litellm-config.yaml"
+        - "{{ openclaw_base_dir }}/build/smokescreen/Dockerfile"
+        - "{{ openclaw_base_dir }}/build/smokescreen/main.go"
+
+    - name: Assert files exist
+      ansible.builtin.assert:
+        that: item.stat.exists
+        fail_msg: "File {{ item.item }} was not created"
+      loop: "{{ file_checks.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Read docker-compose.yml
+      ansible.builtin.slurp:
+        src: "{{ openclaw_base_dir }}/docker-compose.yml"
+      register: compose_content
+
+    - name: Verify docker-compose.yml contains expected services
+      ansible.builtin.assert:
+        that:
+          - "'openclaw:' in (compose_content.content | b64decode)"
+          - "'openclaw-egress:' in (compose_content.content | b64decode)"
+          - "'litellm:' in (compose_content.content | b64decode)"
+          - "'redis:' in (compose_content.content | b64decode)"
+          - "'docker-proxy:' in (compose_content.content | b64decode)"
+        fail_msg: "docker-compose.yml is missing expected services"
+
+    - name: Read smokescreen ACL
+      ansible.builtin.slurp:
+        src: "{{ openclaw_base_dir }}/config/smokescreen-acl.yaml"
+      register: acl_content
+
+    - name: Verify egress ACL contains whitelisted domains
+      ansible.builtin.assert:
+        that:
+          - "'*.anthropic.com' in (acl_content.content | b64decode)"
+          - "'*.openai.com' in (acl_content.content | b64decode)"
+          - "'*.voyageai.com' in (acl_content.content | b64decode)"
+        fail_msg: "Smokescreen ACL is missing whitelisted domains"
+
+    - name: Read .env file
+      ansible.builtin.slurp:
+        src: "{{ openclaw_base_dir }}/.env"
+      register: env_content
+      no_log: true
+
+    - name: Verify .env contains required variables
+      ansible.builtin.assert:
+        that:
+          - "'LITELLM_MASTER_KEY=' in (env_content.content | b64decode)"
+          - "'ANTHROPIC_API_KEY=' in (env_content.content | b64decode)"
+          - "'VOYAGE_API_KEY=' in (env_content.content | b64decode)"
+        fail_msg: ".env is missing required environment variables"
+      no_log: true
+
+    - name: Verify .env file has restricted permissions
+      ansible.builtin.stat:
+        path: "{{ openclaw_base_dir }}/.env"
+      register: env_stat
+
+    - name: Assert .env permissions are 0600
+      ansible.builtin.assert:
+        that: env_stat.stat.mode == '0600'
+        fail_msg: ".env file permissions should be 0600, got {{ env_stat.stat.mode }}"

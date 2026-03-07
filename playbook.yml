@@ -246,6 +246,65 @@
               - domain != 'openclaw.yourdomain.com'
             fail_msg: "domain must be set to your actual domain in vars.yml"
 
+    - name: Validate variable types and ranges
+      tags: [always]
+      block:
+        - name: Ensure reverse_proxy is a valid option
+          ansible.builtin.assert:
+            that:
+              - reverse_proxy in ['caddy', 'tunnel', 'tailscale']
+            fail_msg: "reverse_proxy must be one of: caddy, tunnel, tailscale (got '{{ reverse_proxy }}')"
+
+        - name: Ensure SSH port is a valid number
+          ansible.builtin.assert:
+            that:
+              - ssh_port | int > 0
+              - ssh_port | int < 65536
+            fail_msg: "ssh_port must be between 1 and 65535 (got '{{ ssh_port }}')"
+
+        - name: Ensure egress whitelist is defined and non-empty
+          ansible.builtin.assert:
+            that:
+              - egress_allowed_domains is defined
+              - egress_allowed_domains | length > 0
+            fail_msg: "egress_allowed_domains must contain at least one domain"
+
+        - name: Ensure LiteLLM models are defined
+          ansible.builtin.assert:
+            that:
+              - litellm_models is defined
+              - litellm_models | length > 0
+            fail_msg: "litellm_models must contain at least one model configuration"
+
+        - name: Ensure sandbox resource limits are valid
+          ansible.builtin.assert:
+            that:
+              - sandbox_pids_limit | int > 0
+              - sandbox_max_concurrent | int > 0
+              - sandbox_idle_hours | int > 0
+              - sandbox_max_age_days | int > 0
+            fail_msg: "Sandbox resource limits must be positive integers"
+
+        - name: Ensure maintenance schedules are valid
+          ansible.builtin.assert:
+            that:
+              - backup_cron_hour | int >= 0
+              - backup_cron_hour | int <= 23
+              - backup_cron_minute | int >= 0
+              - backup_cron_minute | int <= 59
+              - watchdog_interval | int >= 1
+              - backup_retention_days | int >= 1
+            fail_msg: "Maintenance schedule values are out of valid range"
+
+        - name: Ensure Telegram bot token is set when Telegram is enabled
+          ansible.builtin.assert:
+            that:
+              - telegram_bot_token is defined
+              - telegram_bot_token | length > 0
+              - telegram_bot_token != 'YOUR_TELEGRAM_BOT_TOKEN'
+            fail_msg: "telegram_bot_token must be set in vault.yml when telegram_enabled is true"
+          when: telegram_enabled | bool
+
     - name: Generate secrets that were left empty
       tags: [always]
       block:
