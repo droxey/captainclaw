@@ -1,6 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 LOG="{{ openclaw_base_dir }}/monitoring/logs/backup-$(date +%F-%H%M).log"
+mkdir -p "{{ openclaw_base_dir }}/monitoring/logs" "{{ openclaw_base_dir }}/monitoring/backups"
 
 (
   flock -n 200 || { echo "Another backup is already running"; exit 1; }

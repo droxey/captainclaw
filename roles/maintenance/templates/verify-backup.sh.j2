@@ -4,6 +4,7 @@ set -euo pipefail
 LOG="{{ openclaw_base_dir }}/monitoring/logs/backup-verify-$(date +%F).log"
 BACKUP_DIR="{{ openclaw_base_dir }}/monitoring/backups"
 ENCRYPTION_KEY_FILE="{{ openclaw_base_dir }}/monitoring/.backup-encryption-key"
+mkdir -p "{{ openclaw_base_dir }}/monitoring/logs"
 
 echo "=== Backup Verification — $(date) ===" | tee -a "$LOG"
 

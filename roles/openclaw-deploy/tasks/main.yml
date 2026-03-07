@@ -13,11 +13,15 @@
 
 # BuildKit (default in Docker 23+) writes build output to stderr, not stdout.
 # Check both streams so changed_when doesn't always report "no change".
+# Retry up to 3 times — Go module downloads can fail on transient network errors.
 - name: Build Smokescreen egress proxy image
   ansible.builtin.command: docker compose build openclaw-egress
   args:
     chdir: "{{ openclaw_base_dir }}"
   register: smokescreen_build
+  retries: 3
+  delay: 15
+  until: smokescreen_build.rc == 0
   changed_when: >
     'Successfully built' in (smokescreen_build.stdout + smokescreen_build.stderr) or
     'exporting to image' in (smokescreen_build.stdout + smokescreen_build.stderr)

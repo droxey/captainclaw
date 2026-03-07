@@ -185,3 +185,13 @@
   args:
     chdir: "{{ openclaw_base_dir }}"
   changed_when: true
+
+- name: Wait for OpenClaw to become healthy after hardening restart
+  ansible.builtin.command: >
+    docker inspect openclaw
+    --format '{{ '{{' }}if .State.Health{{ '}}' }}{{ '{{' }}.State.Health.Status{{ '}}' }}{{ '{{' }}else{{ '}}' }}running{{ '{{' }}end{{ '}}' }}'
+  register: harden_health_check
+  until: harden_health_check.stdout in ['healthy', 'running']
+  retries: 18
+  delay: 10
+  changed_when: false

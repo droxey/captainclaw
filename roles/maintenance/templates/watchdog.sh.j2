@@ -2,6 +2,7 @@
 set -euo pipefail
 
 LOG="{{ openclaw_base_dir }}/monitoring/logs/watchdog.log"
+mkdir -p "{{ openclaw_base_dir }}/monitoring/logs"
 ALERT_FILE="{{ openclaw_base_dir }}/monitoring/.last-alert"
 ALERT_COOLDOWN=1800
 
