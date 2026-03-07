@@ -30,7 +30,7 @@
 
     - name: Check scripts are executable
       ansible.builtin.assert:
-        that: "'0700' in item.stat.mode"
+        that: item.stat.mode == '0700'
         fail_msg: "Script {{ item.item }} should be mode 0700, got {{ item.stat.mode }}"
       loop: "{{ script_checks.results }}"
       loop_control:
