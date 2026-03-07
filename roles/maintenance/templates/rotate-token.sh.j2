@@ -2,6 +2,7 @@
 set -euo pipefail
 LOG="{{ openclaw_base_dir }}/monitoring/logs/token-rotation-$(date +%F).log"
 TOKEN_FILE="{{ openclaw_base_dir }}/monitoring/.gateway-token"
+mkdir -p "{{ openclaw_base_dir }}/monitoring/logs"
 
 (
   flock -n 200 || { echo "Another rotation is already running"; exit 1; }
