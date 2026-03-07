@@ -302,6 +302,14 @@ newgrp docker
 docker compose version
 ```
 
+> **2026 supply chain best practice**: If your org disallows `curl | sh`, download and inspect the installer first or use Docker's signed APT repo. Example:
+> ```bash
+> curl -fsSL https://get.docker.com -o get-docker.sh
+> sha256sum get-docker.sh   # verify against Docker's published checksum
+> sh get-docker.sh
+> ```
+> On regulated hosts, follow Docker's APT instructions so package signatures are verified by `apt` instead of running a remote script directly.
+
 #### Docker Daemon Tuning
 
 Configure Docker for the KVM VPS: rotate container logs to prevent disk fill, enable live-restore so containers survive daemon restarts, and set a sane default for sandbox containers.
@@ -813,6 +821,21 @@ COMPOSE_EOF
 > **Known trade-off**: `proxy-net` is not `internal` (Caddy needs it to reach Let's Encrypt for ACME challenges). This means the `openclaw` Gateway process — but not sandbox containers (`network=none`) — has an internet-routable network interface. Well-behaved HTTP clients honor `HTTPS_PROXY` and route through Smokescreen, but a subprocess that ignores proxy env vars could bypass the egress whitelist. If using Cloudflare Tunnel instead of Caddy (Option B, Step 9), you can add `internal: true` to `proxy-net` to close this gap.
 
 ### Step 4: Deploy
+
+> **2026 supply chain best practice**: Verify container provenance before first run. Pull images, record their digests, and (if signatures are published) verify them with Sigstore:
+> ```bash
+> for img in \
+>   ghcr.io/openclaw/openclaw:2026.2.23 \
+>   ghcr.io/berriai/litellm:main-v1.81.3-stable \
+>   ghcr.io/tecnativa/docker-socket-proxy:v0.4.2 \
+>   redis/redis-stack-server:7.4.0-v3; do
+>   docker pull "$img"
+>   echo "$img:"
+>   docker buildx imagetools inspect "$img" | grep Digest
+>   # Optional: cosign verify "$img"
+> done
+> ```
+> Append the verified digests (e.g., `ghcr.io/openclaw/openclaw:2026.2.23@sha256:<digest>`) to your Compose file to lock deployments to the vetted artifacts, then proceed with the steps below.
 
 ```bash
 cd /opt/openclaw
