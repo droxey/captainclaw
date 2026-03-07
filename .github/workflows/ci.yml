@@ -1,0 +1,87 @@
+---
+# CI pipeline for the OpenClaw hardened single-server deployment playbook.
+#
+# Jobs (run in parallel where independent):
+#   lint         — yamllint + ansible-lint
+#   syntax       — ansible-playbook --syntax-check
+#   molecule     — render all Jinja2 templates and assert content (delegated driver)
+
+name: CI
+
+"on":
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    name: Lint (yamllint + ansible-lint)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install lint tools
+        run: pip install yamllint ansible-lint ansible-core
+
+      - name: Install Ansible collections
+        run: ansible-galaxy collection install -r requirements.yml
+
+      - name: Run yamllint
+        run: yamllint .
+
+      - name: Run ansible-lint
+        run: ansible-lint
+
+  syntax:
+    name: Syntax check
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Ansible
+        run: pip install ansible-core
+
+      - name: Install Ansible collections
+        run: ansible-galaxy collection install -r requirements.yml
+
+      - name: Run playbook syntax check
+        run: ansible-playbook --syntax-check -i inventory/hosts.yml playbook.yml
+
+  molecule:
+    name: Molecule (template rendering)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Molecule and dependencies
+        run: pip install molecule ansible-core
+
+      - name: Install Ansible collections
+        run: ansible-galaxy collection install -r requirements.yml
+
+      - name: Run molecule test
+        run: molecule test
+        env:
+          ANSIBLE_FORCE_COLOR: "true"

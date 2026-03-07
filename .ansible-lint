@@ -8,6 +8,9 @@ profile: production
 skip_list:
   # Register variables don't need role prefixes in a single-playbook project
   - var-naming[no-role-prefix]
+  # Roles use hyphenated names (openclaw-config, reverse-proxy, etc.) — intentional
+  # convention for this project; renaming would break playbook.yml references.
+  - role-name
 
 # Exclude paths that aren't part of the playbook
 exclude_paths:

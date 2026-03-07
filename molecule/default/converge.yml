@@ -1,0 +1,156 @@
+---
+# Molecule converge: render all Jinja2 templates to /tmp/openclaw-molecule
+# using check mode + become: false so no privileged ops run on the CI runner.
+#
+# This validates that all templates are syntactically correct and that the
+# variables defined in molecule.yml satisfy every template reference.
+
+- name: Converge — render configuration templates
+  hosts: instance
+  gather_facts: false
+  become: false
+
+  tasks:
+    - name: Create molecule test directory tree
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - "{{ openclaw_base_dir }}"
+        - "{{ openclaw_base_dir }}/config"
+        - "{{ openclaw_base_dir }}/build/smokescreen"
+        - "{{ openclaw_base_dir }}/monitoring"
+        - "{{ openclaw_base_dir }}/monitoring/logs"
+        - "{{ openclaw_base_dir }}/monitoring/backups"
+
+    # ── base role templates ──────────────────────────────────────────
+    - name: Render SSH hardening config
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../../roles/base/templates/99-hardening.conf.j2"
+        dest: "{{ openclaw_base_dir }}/99-hardening.conf"
+        mode: "0644"
+
+    - name: Render sysctl tuning config
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../../roles/base/templates/99-openclaw.conf.j2"
+        dest: "{{ openclaw_base_dir }}/99-openclaw.conf"
+        mode: "0644"
+
+    - name: Render Docker daemon config
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../../roles/base/templates/daemon.json.j2"
+        dest: "{{ openclaw_base_dir }}/daemon.json"
+        mode: "0644"
+
+    - name: Render fail2ban jail config
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../../roles/base/templates/jail.local.j2"
+        dest: "{{ openclaw_base_dir }}/jail.local"
+        mode: "0644"
+
+    # ── openclaw-config role templates ──────────────────────────────
+    - name: Render Smokescreen ACL
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../../roles/openclaw-config/templates/smokescreen-acl.yaml.j2"
+        dest: "{{ openclaw_base_dir }}/config/smokescreen-acl.yaml"
+        mode: "0644"
+
+    - name: Render LiteLLM config
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../../roles/openclaw-config/templates/litellm-config.yaml.j2"
+        dest: "{{ openclaw_base_dir }}/config/litellm-config.yaml"
+        mode: "0644"
+
+    - name: Render Docker Compose file
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../../roles/openclaw-config/templates/docker-compose.yml.j2"
+        dest: "{{ openclaw_base_dir }}/docker-compose.yml"
+        mode: "0644"
+
+    - name: Render .env file
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../../roles/openclaw-config/templates/env.j2"
+        dest: "{{ openclaw_base_dir }}/.env"
+        mode: "0600"
+
+    - name: Render Smokescreen Dockerfile
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../../roles/openclaw-config/templates/Dockerfile.smokescreen.j2"
+        dest: "{{ openclaw_base_dir }}/build/smokescreen/Dockerfile"
+        mode: "0644"
+
+    - name: Render Smokescreen main.go
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../../roles/openclaw-config/templates/smokescreen-main.go.j2"
+        dest: "{{ openclaw_base_dir }}/build/smokescreen/main.go"
+        mode: "0644"
+
+    # ── reverse-proxy role templates ─────────────────────────────────
+    - name: Render Caddyfile
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../../roles/reverse-proxy/templates/Caddyfile.j2"
+        dest: "{{ openclaw_base_dir }}/Caddyfile"
+        mode: "0644"
+
+    - name: Render Caddy compose overlay
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../../roles/reverse-proxy/templates/compose.caddy.yml.j2"
+        dest: "{{ openclaw_base_dir }}/compose.caddy.yml"
+        mode: "0644"
+
+    - name: Render Cloudflare Tunnel compose overlay
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../../roles/reverse-proxy/templates/compose.tunnel.yml.j2"
+        dest: "{{ openclaw_base_dir }}/compose.tunnel.yml"
+        mode: "0644"
+
+    # ── maintenance role templates ────────────────────────────────────
+    - name: Render backup script
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../../roles/maintenance/templates/backup.sh.j2"
+        dest: "{{ openclaw_base_dir }}/monitoring/backup.sh"
+        mode: "0755"
+
+    - name: Render token rotation script
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../../roles/maintenance/templates/rotate-token.sh.j2"
+        dest: "{{ openclaw_base_dir }}/monitoring/rotate-token.sh"
+        mode: "0755"
+
+    - name: Render watchdog script
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../../roles/maintenance/templates/watchdog.sh.j2"
+        dest: "{{ openclaw_base_dir }}/monitoring/watchdog.sh"
+        mode: "0755"
+
+    - name: Render backup verification script
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../../roles/maintenance/templates/verify-backup.sh.j2"
+        dest: "{{ openclaw_base_dir }}/monitoring/verify-backup.sh"
+        mode: "0755"
+
+    - name: Render unattended-upgrades config
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../../roles/maintenance/templates/50unattended-upgrades.j2"
+        dest: "{{ openclaw_base_dir }}/50unattended-upgrades"
+        mode: "0644"
+
+    - name: Render auto-upgrades schedule config
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../../roles/maintenance/templates/20auto-upgrades.j2"
+        dest: "{{ openclaw_base_dir }}/20auto-upgrades"
+        mode: "0644"
+
+    # ── monitoring role templates ─────────────────────────────────────
+    - name: Render Prometheus config
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../../roles/monitoring/templates/prometheus.yml.j2"
+        dest: "{{ openclaw_base_dir }}/config/prometheus.yml"
+        mode: "0644"
+
+    - name: Render monitoring compose overlay
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../../roles/monitoring/templates/compose.monitoring.yml.j2"
+        dest: "{{ openclaw_base_dir }}/compose.monitoring.yml"
+        mode: "0644"

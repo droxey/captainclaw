@@ -1,0 +1,102 @@
+---
+# Molecule verify: assert that all rendered config files exist and contain
+# expected content. Runs on localhost (delegated driver).
+
+- name: Verify rendered configuration files
+  hosts: instance
+  gather_facts: false
+  become: false
+
+  tasks:
+    # ── File existence checks ────────────────────────────────────────
+    - name: Collect expected rendered files
+      ansible.builtin.set_fact:
+        expected_files:
+          - "{{ openclaw_base_dir }}/99-hardening.conf"
+          - "{{ openclaw_base_dir }}/99-openclaw.conf"
+          - "{{ openclaw_base_dir }}/daemon.json"
+          - "{{ openclaw_base_dir }}/jail.local"
+          - "{{ openclaw_base_dir }}/config/smokescreen-acl.yaml"
+          - "{{ openclaw_base_dir }}/config/litellm-config.yaml"
+          - "{{ openclaw_base_dir }}/docker-compose.yml"
+          - "{{ openclaw_base_dir }}/.env"
+          - "{{ openclaw_base_dir }}/build/smokescreen/Dockerfile"
+          - "{{ openclaw_base_dir }}/build/smokescreen/main.go"
+          - "{{ openclaw_base_dir }}/Caddyfile"
+          - "{{ openclaw_base_dir }}/compose.caddy.yml"
+          - "{{ openclaw_base_dir }}/compose.tunnel.yml"
+          - "{{ openclaw_base_dir }}/monitoring/backup.sh"
+          - "{{ openclaw_base_dir }}/monitoring/rotate-token.sh"
+          - "{{ openclaw_base_dir }}/monitoring/watchdog.sh"
+          - "{{ openclaw_base_dir }}/monitoring/verify-backup.sh"
+          - "{{ openclaw_base_dir }}/50unattended-upgrades"
+          - "{{ openclaw_base_dir }}/20auto-upgrades"
+          - "{{ openclaw_base_dir }}/config/prometheus.yml"
+          - "{{ openclaw_base_dir }}/compose.monitoring.yml"
+
+    - name: Assert all rendered files exist
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: file_stat
+      failed_when: not file_stat.stat.exists
+      loop: "{{ expected_files }}"
+      loop_control:
+        label: "{{ item | basename }}"
+
+    # ── Content spot-checks ──────────────────────────────────────────
+    - name: Read Smokescreen ACL
+      ansible.builtin.slurp:
+        src: "{{ openclaw_base_dir }}/config/smokescreen-acl.yaml"
+      register: smokescreen_acl
+
+    - name: Assert Smokescreen ACL contains expected domains
+      ansible.builtin.assert:
+        that:
+          - "'*.anthropic.com' in (smokescreen_acl.content | b64decode)"
+          - "'*.openai.com' in (smokescreen_acl.content | b64decode)"
+          - "'*.voyageai.com' in (smokescreen_acl.content | b64decode)"
+          - "'action: enforce' in (smokescreen_acl.content | b64decode)"
+        fail_msg: "Smokescreen ACL missing expected domain entries or enforce policy"
+
+    - name: Read Docker Compose file
+      ansible.builtin.slurp:
+        src: "{{ openclaw_base_dir }}/docker-compose.yml"
+      register: compose_file
+
+    - name: Assert Docker Compose contains all required services
+      ansible.builtin.assert:
+        that:
+          - "'openclaw-docker-proxy' in (compose_file.content | b64decode)"
+          - "'openclaw-egress' in (compose_file.content | b64decode)"
+          - "'openclaw-litellm' in (compose_file.content | b64decode)"
+          - "'openclaw-redis' in (compose_file.content | b64decode)"
+          - "'internal: true' in (compose_file.content | b64decode)"
+        fail_msg: "Docker Compose file missing required services or network isolation"
+
+    - name: Read daemon.json
+      ansible.builtin.slurp:
+        src: "{{ openclaw_base_dir }}/daemon.json"
+      register: daemon_json
+
+    - name: Assert daemon.json is valid JSON
+      ansible.builtin.assert:
+        that:
+          - "(daemon_json.content | b64decode | from_json) is mapping"
+        fail_msg: "daemon.json did not parse as valid JSON"
+
+    - name: Read LiteLLM config
+      ansible.builtin.slurp:
+        src: "{{ openclaw_base_dir }}/config/litellm-config.yaml"
+      register: litellm_config
+
+    - name: Assert LiteLLM config is valid YAML with model list
+      ansible.builtin.assert:
+        that:
+          - "(litellm_config.content | b64decode | from_yaml) is mapping"
+          - "'model_list' in (litellm_config.content | b64decode | from_yaml)"
+        fail_msg: "litellm-config.yaml is not valid YAML or missing model_list"
+
+    - name: Clean up molecule test directory
+      ansible.builtin.file:
+        path: "{{ openclaw_base_dir }}"
+        state: absent

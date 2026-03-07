@@ -1,0 +1,157 @@
+---
+# Molecule scenario: validate pre-flight checks and template rendering
+# without a live target host.
+#
+# Driver: default (delegated — no real VM or container created)
+# Connection: local  → tasks run on localhost inside CI / developer machine
+#
+# What is tested:
+#   • Variable assertion pre_tasks — bad placeholder values should fail fast
+#   • Template rendering for all Jinja2 configs (Smokescreen ACL, LiteLLM,
+#     Docker Compose, .env, sysctl, daemon.json, Caddyfile, etc.)
+#   • ansible-lint passes on all role task files
+#   • Playbook syntax is valid
+#
+# What is NOT tested here (requires a live host):
+#   • apt / Docker installation
+#   • UFW / firewall changes
+#   • docker compose up / container health
+
+driver:
+  name: default
+
+platforms:
+  - name: instance
+
+provisioner:
+  name: ansible
+  inventory:
+    host_vars:
+      instance:
+        ansible_connection: local
+        # ── Required vars (valid non-placeholder values for testing) ──
+        deploy_user: deploy
+        ssh_port: 9922
+        admin_ip: "203.0.113.1"
+        openclaw_base_dir: /tmp/openclaw-molecule
+        domain: "openclaw.example.com"
+        local_ssh_key_path: "{{ lookup('env', 'HOME') }}/.ssh/id_ed25519"
+        ansible_ssh_private_key_file: "{{ lookup('env', 'HOME') }}/.ssh/id_ed25519"
+        # ── Image versions ────────────────────────────────────────────
+        openclaw_version: "2026.2.23"
+        docker_proxy_version: "v0.4.2"
+        smokescreen_commit: "v0.0.4"
+        smokescreen_go_version: "1.22"
+        smokescreen_alpine_version: "3.20"
+        litellm_version: "main-v1.81.3-stable"
+        redis_version: "7.4.0-v3"
+        caddy_version: "2-alpine"
+        cloudflared_version: "2026.2.0"
+        prometheus_version: "v3.2.1"
+        grafana_version: "11.5.2"
+        redis_exporter_version: "v1.67.0"
+        # ── Docker daemon ─────────────────────────────────────────────
+        docker_log_max_size: "10m"
+        docker_log_max_file: "3"
+        docker_dns: ["1.1.1.1", "8.8.8.8"]
+        docker_max_concurrent_downloads: 4
+        docker_max_concurrent_uploads: 2
+        # ── System tuning ─────────────────────────────────────────────
+        swappiness: 10
+        inotify_max_watches: 524288
+        inotify_max_instances: 512
+        somaxconn: 1024
+        # ── Egress whitelist ──────────────────────────────────────────
+        egress_allowed_domains:
+          - "*.anthropic.com"
+          - "*.openai.com"
+          - "*.voyageai.com"
+        # ── LiteLLM ───────────────────────────────────────────────────
+        litellm_models:
+          - name: "anthropic/claude-opus-4-6"
+            model: "claude-opus-4-6"
+            key_env: "ANTHROPIC_API_KEY"
+            max_budget: 100.0
+            rpm: 60
+        litellm_cache_ttl: 3600
+        litellm_similarity_threshold: 0.8
+        litellm_master_key: "test-litellm-key"
+        redis_maxmemory: "256mb"
+        # ── Secrets (test values — not real keys) ─────────────────────
+        anthropic_api_key: "sk-ant-test-key-for-molecule"
+        voyage_api_key: "pa-test-key-for-molecule"
+        gateway_token: "test-gateway-token"
+        backup_encryption_key: "test-backup-key"
+        telegram_bot_token: "000000000:test-token"
+        # ── Hardening ─────────────────────────────────────────────────
+        openclaw_default_model: "anthropic/claude-opus-4-6"
+        openclaw_heartbeat_model: "anthropic/claude-3-5-haiku-latest"
+        openclaw_max_tokens: 4096
+        sandbox_memory_limit: "1g"
+        sandbox_memory_swap: "1536m"
+        sandbox_cpu_limit: "1.0"
+        sandbox_pids_limit: 512
+        sandbox_max_concurrent: 8
+        sandbox_idle_hours: 12
+        sandbox_max_age_days: 3
+        openclaw_cpus: "8.0"
+        openclaw_memory: "16G"
+        openclaw_memory_reservation: "4G"
+        docker_proxy_cpus: "0.5"
+        docker_proxy_memory: "256M"
+        smokescreen_cpus: "0.5"
+        smokescreen_memory: "128M"
+        litellm_cpus: "2.0"
+        litellm_memory: "2G"
+        redis_cpus: "0.5"
+        redis_memory: "512M"
+        openclaw_agent_tool_denials:
+          - process
+          - browser
+          - nodes
+          - gateway
+        openclaw_gateway_tool_denials:
+          - sessions_spawn
+          - gateway
+        # ── Channel ───────────────────────────────────────────────────
+        telegram_enabled: true
+        # ── Memory ────────────────────────────────────────────────────
+        memory_provider: "voyage"
+        memory_model: "voyage-3-large"
+        # ── Reverse proxy ─────────────────────────────────────────────
+        reverse_proxy: "caddy"
+        # ── Monitoring ────────────────────────────────────────────────
+        monitoring_enabled: false
+        grafana_admin_password: ""
+        # ── Maintenance ───────────────────────────────────────────────
+        backup_retention_days: 14
+        log_retention_days: 30
+        backup_cron_hour: 3
+        backup_cron_minute: 0
+        token_rotation_day: 1
+        token_rotation_hour: 4
+        watchdog_interval: 5
+        watchdog_restart_threshold: 3
+        watchdog_disk_threshold: 85
+        watchdog_memory_threshold: 90
+        auto_reboot: true
+        auto_reboot_time: "05:00"
+        tailscale_enabled: false
+        disable_ipv6: false
+  config_options:
+    defaults:
+      fact_caching: memory
+
+verifier:
+  name: ansible
+
+lint: |
+  set -e
+  yamllint .
+  ansible-lint
+
+scenario:
+  test_sequence:
+    - syntax
+    - converge
+    - verify
