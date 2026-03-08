@@ -4,6 +4,12 @@
 # These are AI agent personality/prompt files (markdown) — not services.
 # Placed in /root/.openclaw/agents/ inside the container for reference.
 
+- name: Verify OpenClaw container is running
+  ansible.builtin.command: docker inspect --format '{{ '{{' }}.State.Running{{ '}}' }}' openclaw
+  register: openclaw_running
+  changed_when: false
+  failed_when: openclaw_running.stdout != 'true'
+
 - name: Create agency-agents staging directory on host
   ansible.builtin.file:
     path: "{{ openclaw_base_dir }}/agency-agents"
@@ -23,6 +29,24 @@
   retries: 3
   delay: 10
   until: agents_clone is not failed
+
+- name: Validate requested divisions exist in cloned repository
+  ansible.builtin.stat:
+    path: "{{ openclaw_base_dir }}/agency-agents/repo/{{ item }}"
+  loop: "{{ agency_agents_divisions }}"
+  register: division_checks
+
+- name: Fail if any requested division is missing
+  ansible.builtin.fail:
+    msg: >
+      Division '{{ item.item }}' not found in agency-agents repository.
+      Available divisions: engineering, design, marketing, product,
+      project-management, testing, support, spatial-computing, specialized.
+      Check agency_agents_divisions in vars.yml.
+  loop: "{{ division_checks.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: not item.stat.exists
 
 - name: Create agents directory inside container
   ansible.builtin.command: docker exec openclaw mkdir -p /root/.openclaw/agents

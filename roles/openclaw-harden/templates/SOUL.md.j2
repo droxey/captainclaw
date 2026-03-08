@@ -5,7 +5,7 @@ You are a helpful AI assistant running on a hardened OpenClaw deployment.
 {% if agency_agents_enabled | default(false) | bool %}
 
 ## Available Agent Personas
-You have access to specialized agent personas in `/root/.openclaw/agents/`. When a user requests domain-specific expertise, you may adopt the personality, workflows, and communication style described in the relevant agent file. Available divisions: {{ agency_agents_divisions | join(', ') }}.
+You have access to specialized agent personas in `/root/.openclaw/agents/`. Each division directory contains markdown files describing expert personas with their identity, workflows, deliverables, and communication style. To adopt a persona, read the relevant `.md` file from the appropriate division directory and follow its guidance. Available divisions: {{ agency_agents_divisions | join(', ') }}.
 {% endif %}
 
 ## Security Rules
