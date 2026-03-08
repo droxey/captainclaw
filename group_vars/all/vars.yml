@@ -11,7 +11,7 @@ local_ssh_key_path: "{{ lookup('env', 'HOME') }}/.ssh/id_ed25519"
 ansible_ssh_private_key_file: "{{ local_ssh_key_path }}"
 
 # ── Image Versions (pinned) ───────────────────────────────────────────
-openclaw_version: "2026.3.2"
+openclaw_version: "2026.3.7"
 docker_proxy_version: "v0.4.2"
 # Smokescreen is built from source (no pre-built image).
 # Pin to the COMMIT SHA (not the tag) for reproducible builds — git tags can be force-pushed.

@@ -4,7 +4,7 @@
   <p align="center">
     <a href="https://github.com/droxey/clincher/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/droxey/clincher/ci.yml?label=CI&logo=github" alt="CI"></a>
     <a href="https://docs.ansible.com/"><img src="https://img.shields.io/badge/Ansible-2.17+-red?logo=ansible&logoColor=white" alt="Ansible"></a>
-    <a href="https://github.com/openclaw/openclaw"><img src="https://img.shields.io/badge/OpenClaw-2026.3.2-blue" alt="OpenClaw"></a>
+    <a href="https://github.com/openclaw/openclaw"><img src="https://img.shields.io/badge/OpenClaw-2026.3.7-blue" alt="OpenClaw"></a>
     <a href="https://www.docker.com/"><img src="https://img.shields.io/badge/Docker-Compose-blue?logo=docker&logoColor=white" alt="Docker Compose"></a>
     <a href="https://releases.ubuntu.com/24.04/"><img src="https://img.shields.io/badge/Ubuntu-24.04-orange?logo=ubuntu&logoColor=white" alt="Ubuntu 24.04"></a>
     <a href="LICENSE"><img src="https://img.shields.io/github/license/droxey/clincher" alt="License"></a>
@@ -301,7 +301,7 @@ Update the image version in `vars.yml` and re-run:
 
 ```bash
 # In vars.yml, change:
-#   openclaw_version: "2026.3.2"  →  openclaw_version: "2026.4.0"
+#   openclaw_version: "2026.3.7"  →  openclaw_version: "2026.4.0"
 
 ansible-playbook playbook.yml --ask-vault-pass --tags config,deploy,harden,verify
 ```
@@ -759,7 +759,7 @@ services:
     restart: unless-stopped
 
   openclaw:
-    image: ghcr.io/openclaw/openclaw:2026.3.2
+    image: ghcr.io/openclaw/openclaw:2026.3.7
     container_name: openclaw
     environment:
       DOCKER_HOST: tcp://openclaw-docker-proxy:2375
@@ -944,7 +944,7 @@ COMPOSE_EOF
 > **2026 supply chain best practice**: Verify container provenance before first run. Pull images, record their digests, and (if signatures are published) verify them with Sigstore:
 > ```bash
 > for img in \
->   ghcr.io/openclaw/openclaw:2026.3.2 \
+>   ghcr.io/openclaw/openclaw:2026.3.7 \
 >   ghcr.io/berriai/litellm:main-v1.81.3-stable \
 >   ghcr.io/tecnativa/docker-socket-proxy:v0.4.2 \
 >   redis/redis-stack-server:7.4.0-v3; do
@@ -954,7 +954,7 @@ COMPOSE_EOF
 >   # Optional: cosign verify "$img"
 > done
 > ```
-> Append the verified digests (e.g., `ghcr.io/openclaw/openclaw:2026.3.2@sha256:<digest>`) to your Compose file to lock deployments to the vetted artifacts, then proceed with the steps below.
+> Append the verified digests (e.g., `ghcr.io/openclaw/openclaw:2026.3.7@sha256:<digest>`) to your Compose file to lock deployments to the vetted artifacts, then proceed with the steps below.
 
 ```bash
 cd /opt/openclaw
@@ -1345,7 +1345,7 @@ exit
 > docker exec openclaw du -sh /root/.openclaw/memory/
 > ```
 >
-> If index size exceeds ~500 MB or `openclaw memory index --verify` begins reporting slow query times, run a full rebuild. There is no migration path to an external vector store (PostgreSQL + pgvector) as of 2026.3.2 — external vector storage is not natively supported.
+> If index size exceeds ~500 MB or `openclaw memory index --verify` begins reporting slow query times, run a full rebuild. There is no migration path to an external vector store (PostgreSQL + pgvector) as of 2026.3.7 — external vector storage is not natively supported.
 
 ### Step 9: Reverse Proxy Setup
 
@@ -2358,7 +2358,7 @@ A pre-staged standby is a pre-provisioned server that mirrors the production con
 
 ```bash
 # On the standby server
-docker pull ghcr.io/openclaw/openclaw:2026.3.2
+docker pull ghcr.io/openclaw/openclaw:2026.3.7
 docker pull ghcr.io/tecnativa/docker-socket-proxy:v0.4.2
 # Build Smokescreen egress proxy image (built from source, not pulled)
 cd /opt/openclaw && docker compose build openclaw-egress
@@ -2672,7 +2672,7 @@ The scaling pattern is **bot partitioning**: create multiple Telegram bots (via 
 cat > /opt/openclaw/compose.secondary.yml << 'EOF'
 services:
   openclaw-secondary:
-    image: ghcr.io/openclaw/openclaw:2026.3.2
+    image: ghcr.io/openclaw/openclaw:2026.3.7
     container_name: openclaw-secondary
     environment:
       DOCKER_HOST: tcp://openclaw-docker-proxy:2375
