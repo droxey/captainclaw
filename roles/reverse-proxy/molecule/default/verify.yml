@@ -1,0 +1,73 @@
+---
+# Verify reverse-proxy role outputs
+- name: Verify reverse-proxy template rendering
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+
+  vars:
+    openclaw_base_dir: /tmp/molecule-reverse-proxy
+
+  tasks:
+    - name: Check rendered files exist
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: file_checks
+      loop:
+        - "{{ openclaw_base_dir }}/Caddyfile"
+        - "{{ openclaw_base_dir }}/compose.caddy.yml"
+        - "{{ openclaw_base_dir }}/compose.tunnel.yml"
+
+    - name: Assert files exist
+      ansible.builtin.assert:
+        that: item.stat.exists
+        fail_msg: "File {{ item.item }} was not created"
+      loop: "{{ file_checks.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Read Caddyfile
+      ansible.builtin.slurp:
+        src: "{{ openclaw_base_dir }}/Caddyfile"
+      register: caddyfile_content
+
+    - name: Verify Caddyfile contains expected content
+      ansible.builtin.assert:
+        that:
+          - "'test.example.com' in (caddyfile_content.content | b64decode)"
+          - "'reverse_proxy openclaw:18789' in (caddyfile_content.content | b64decode)"
+          - "'grafana' not in (caddyfile_content.content | b64decode)"
+        fail_msg: "Caddyfile is missing expected content or contains unexpected monitoring block"
+
+    - name: Read Caddy Compose file
+      ansible.builtin.slurp:
+        src: "{{ openclaw_base_dir }}/compose.caddy.yml"
+      register: caddy_compose_content
+
+    - name: Verify Caddy Compose file contains expected content
+      ansible.builtin.assert:
+        that:
+          - "'caddy:2.8.4-alpine' in (caddy_compose_content.content | b64decode)"
+          - "'cap_drop' in (caddy_compose_content.content | b64decode)"
+          - "'NET_BIND_SERVICE' in (caddy_compose_content.content | b64decode)"
+          - "'no-new-privileges:true' in (caddy_compose_content.content | b64decode)"
+          - "'openclaw_proxy-net' in (caddy_compose_content.content | b64decode)"
+          - "'openclaw_ingress-net' in (caddy_compose_content.content | b64decode)"
+        fail_msg: "compose.caddy.yml is missing expected content"
+
+    - name: Read Tunnel Compose file
+      ansible.builtin.slurp:
+        src: "{{ openclaw_base_dir }}/compose.tunnel.yml"
+      register: tunnel_compose_content
+
+    - name: Verify Tunnel Compose file contains expected content
+      ansible.builtin.assert:
+        that:
+          - "'cloudflared' in (tunnel_compose_content.content | b64decode)"
+          - "'cloudflare/cloudflared:2026.2.0' in (tunnel_compose_content.content | b64decode)"
+          - "'cap_drop' in (tunnel_compose_content.content | b64decode)"
+          - "'read_only: true' in (tunnel_compose_content.content | b64decode)"
+          - "'no-new-privileges:true' in (tunnel_compose_content.content | b64decode)"
+          - "'openclaw_proxy-net' in (tunnel_compose_content.content | b64decode)"
+        fail_msg: "compose.tunnel.yml is missing expected content"
