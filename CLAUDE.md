@@ -26,7 +26,7 @@ This repository is the **OpenClaw Hardened Single-Server Deployment** guide — 
 **This is a documentation-only repository.** There is no application source code, no build system, and no automated tests. All content lives in Markdown files and a Claude Code settings file.
 
 - **Target**: 1 Ubuntu 24.04 KVM VPS (16 vCPU, 64 GB RAM, 8 GB swap, 4 TB NVMe)
-- **OpenClaw Version**: `ghcr.io/openclaw/openclaw:2026.2.23` (pinned)
+- **OpenClaw Version**: `ghcr.io/openclaw/openclaw:2026.3.2` (pinned)
 - **Threat Model**: Prompt injection → arbitrary tool execution → host/container escape
 
 ## Repository Structure
@@ -102,7 +102,7 @@ Three bridge networks enforce least-privilege communication. `openclaw-net` is *
 | Service | Image | Purpose | Network |
 |---------|-------|---------|---------|
 | `docker-proxy` | `ghcr.io/tecnativa/docker-socket-proxy:v0.4.2` | Sandboxed Docker API access (EXEC only) | `openclaw-net` |
-| `openclaw` | `ghcr.io/openclaw/openclaw:2026.2.23` | Main gateway — agent runtime, tool execution | `openclaw-net` + `proxy-net` |
+| `openclaw` | `ghcr.io/openclaw/openclaw:2026.3.2` | Main gateway — agent runtime, tool execution | `openclaw-net` + `proxy-net` |
 | `litellm` | `ghcr.io/berriai/litellm:main-v1.81.3-stable` | LLM API proxy — routing, cost controls, caching | `openclaw-net` |
 | `openclaw-egress` | Built from source ([stripe/smokescreen](https://github.com/stripe/smokescreen)) | Egress whitelist proxy for LLM API calls | `openclaw-net` + `egress-net` |
 | `redis` | `redis/redis-stack-server:7.4.0-v3` | Semantic cache for LiteLLM (RediSearch module) | `openclaw-net` |
