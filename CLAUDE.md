@@ -45,6 +45,7 @@ clincher/
 │   ├── github-deployment-guide.prompt.md
 │   └── github-smallproject-virality.prompt.md
 ├── .claude/
+│   ├── commands/                # Claude Code slash commands (skill wrappers)
 │   └── settings.local.json      # Claude Code permissions and output style config
 ├── ansible.cfg                  # SSH pipelining, YAML output, retry config
 ├── requirements.yml             # Galaxy collections (community.docker, community.general)
@@ -235,7 +236,7 @@ Standalone prompts in `prompts/` and `.claude/commands/` follow the same princip
 
 The `name` and `description` fields are the only metadata the agent sees before triggering a skill.
 
-- **Name**: 1–64 characters, lowercase letters, numbers, and single hyphens only. Must match the parent directory name.
+- **Name**: 1–64 characters, lowercase letters, numbers, and single hyphens only. For skills, must match the parent directory name. For standalone prompts, use kebab-case with a `.prompt.md` extension.
 - **Description**: Max 1,024 characters. Write in third person. Include negative triggers to prevent false matches.
   - **Bad**: `"Ansible skills."`
   - **Good**: `"Reviews Ansible playbooks, roles, and task files for production readiness. Use when the user asks for an Ansible code review. Don't use for Terraform, Puppet, or shell scripts."`
