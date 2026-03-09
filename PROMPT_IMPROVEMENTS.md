@@ -23,18 +23,20 @@ The following principles from `mgechev/skills-best-practices` were used as the e
 
 ## File Inventory
 
-| File | Type | Lines | Location |
-|------|------|------:|----------|
-| `humanizer.prompt.md` | Portable prompt | 469 | `prompts/` |
-| `ansible-review.prompt.md` | Portable prompt | 121 | `prompts/` |
-| `github-deployment-guide.prompt.md` | Portable prompt | 1207 | `prompts/` |
-| `github-smallproject-virality.prompt.md` | Portable prompt | 45 | `prompts/` |
-| `humanizer.md` | Claude command | 488 | `.claude/commands/` |
-| `ansible-review.md` | Claude command | 133 | `.claude/commands/` |
-| `code-review-ansible.md` | Claude command | 118 | `.claude/commands/` |
-| `github-deployment-guide.md` | Claude command | 1207 | `.claude/commands/` |
-| `github-smallproject-virality.md` | Claude command | 45 | `.claude/commands/` |
-| `GitHub_SmallProject_Trend_Adapter_Skill_2026.md` | Generated skill output | 621 | repo root |
+> **Status:** The improvements recommended below were implemented in PRs #95-#97. Line counts, frontmatter, and directory structure reflect the post-implementation state. The per-file violation analysis (sections 1-10) is preserved as a historical audit trail — most violations listed have been resolved.
+
+| File | Type | Lines (before) | Lines (after) | Location |
+|------|------|------:|------:|----------|
+| `humanizer.prompt.md` | Portable prompt | 469 | 101 | `prompts/` |
+| `ansible-review.prompt.md` | Portable prompt | 121 | 122 | `prompts/` |
+| `github-deployment-guide.prompt.md` | Portable prompt | 1207 | 311 | `prompts/` |
+| `github-smallproject-virality.prompt.md` | Portable prompt | 45 | 48 | `prompts/` |
+| `humanizer.md` | Claude command | 488 | 112 | `.claude/commands/` |
+| `ansible-review.md` | Claude command | 133 | 125 | `.claude/commands/` |
+| ~~`code-review-ansible.md`~~ | ~~Claude command~~ | ~~118~~ | — | Merged into `ansible-review.md` |
+| `github-deployment-guide.md` | Claude command | 1207 | 318 | `.claude/commands/` |
+| `github-smallproject-virality.md` | Claude command | 45 | 56 | `.claude/commands/` |
+| `GitHub_SmallProject_Trend_Adapter_Skill_2026.md` | Generated skill output | 621 | 621 | `prompts/assets/` |
 
 ---
 
@@ -375,46 +377,29 @@ The following principles from `mgechev/skills-best-practices` were used as the e
 
 ## Cross-Cutting Issues
 
-### A. Portable prompts lack discoverability metadata
+> **Status:** Issues A-C below have been resolved. Issue D remains open.
 
-None of the four files in `prompts/` have any frontmatter. While the `prompts/README.md` states "Each `.prompt.md` file is plain Markdown with no agent-specific frontmatter," this conflicts with the best practice that agents need metadata to discover and route to skills.
+### A. ~~Portable prompts lack discoverability metadata~~ (Resolved)
 
-**Recommendation:** Add an optional YAML frontmatter block to each `.prompt.md` with `name` and `description` fields. Since these are agent-agnostic, omit agent-specific fields like `allowed-tools`. Agents that do not parse frontmatter will ignore it. Note: this trades some portability for discoverability — agents with strict YAML schema validation may need the frontmatter adjusted to their format.
+All four `.prompt.md` files now have YAML frontmatter with `name` and `description` fields, including negative triggers. Implemented in PR #96.
 
-```yaml
----
-name: humanizer
-description: |
-  Remove signs of AI-generated writing from text. Detects 24 AI writing
-  patterns from Wikipedia's Signs of AI writing guide. Do not use for
-  technical documentation or code comments.
----
-```
+### B. ~~Second-person framing is universal~~ (Resolved)
 
-### B. Second-person framing is universal
+Prompts were rewritten to use third-person imperative framing. Implemented in PRs #95-#96.
 
-Every prompt in the repository uses "You are…" framing. The best practice recommends third-person imperative ("Extract the text…", "Review the code…"). This is a systemic issue across all 9 prompt/command files.
+### C. ~~No `references/` or `assets/` directories exist~~ (Resolved)
 
-**Recommendation:** Rewrite opening lines of each file. Example:
+Both directories now exist and are populated:
+- `prompts/references/` — 14 files (workflow YAMLs, HCL, JSON, markdown)
+- `prompts/assets/` — 4 files (templates, examples, generated output)
 
-| Before | After |
-|--------|-------|
-| "You are a writing editor that identifies…" | "Identify and remove signs of AI-generated text to make writing sound natural." |
-| "You are a senior Ansible engineer…" | "Review the provided Ansible code for production readiness using ansible-lint production profile and 2026 best practices." |
-| "You are GitHub's Principal Engineer…" | "Analyze the target repository and generate a small-project trend-adapter skill file." |
-| "You are a Principal DevOps Engineer…" | "Generate a GitHub deployment guide for the provided Ansible project." |
-
-### C. No `references/` or `assets/` directories exist
-
-The repository has no mechanism for progressive disclosure. All content is inline.
-
-**Recommendation:** Create `prompts/references/` and `prompts/assets/` directories. The humanizer and deployment guide prompts benefit most from this — the humanizer has ~350 lines of examples, and the deployment guide has ~900 lines of embedded configs.
+Implemented in PRs #95-#96.
 
 ### D. No validation has been performed
 
 None of the prompts have been tested through the recommended validation pipeline (Discovery → Logic → Edge Case → Architecture Refinement).
 
-**Recommendation:** After implementing the changes above, run each prompt through the four-step validation process documented in `mgechev/skills-best-practices`:
+**Recommendation:** Run each prompt through the four-step validation process documented in `mgechev/skills-best-practices`:
 
 1. **Discovery validation** — paste frontmatter into an LLM and check trigger accuracy
 2. **Logic validation** — simulate step-by-step execution and flag ambiguities
@@ -425,37 +410,37 @@ None of the prompts have been tested through the recommended validation pipeline
 
 ## Implementation Priority
 
-| Priority | File | Effort | Impact |
-|----------|------|--------|--------|
-| **P0** | `github-deployment-guide.prompt.md` + `.claude/commands/github-deployment-guide.md` | High | Eliminates 900+ lines of inline context per invocation |
-| **P0** | `.claude/commands/code-review-ansible.md` | Low | Eliminate redundant file or add missing frontmatter |
-| **P1** | `humanizer.prompt.md` + `.claude/commands/humanizer.md` | Medium | Reduces ~400 lines of inline patterns to JiT references |
-| **P1** | `.claude/commands/github-smallproject-virality.md` | Low | Add missing frontmatter (3 missing commands total) |
-| **P1** | `.claude/commands/github-deployment-guide.md` | Low | Add missing frontmatter |
-| **P2** | `ansible-review.prompt.md` + `.claude/commands/ansible-review.md` | Low | Remove duplication, fix framing |
-| **P2** | `github-smallproject-virality.prompt.md` | Low | Minor wording fixes |
-| **P2** | `GitHub_SmallProject_Trend_Adapter_Skill_2026.md` | Medium | Relocate or restructure |
-| **P3** | All files — second-person → third-person | Medium | Systemic framing improvement |
-| **P3** | All files — add negative triggers | Low | Improve routing accuracy |
-| **P3** | All prompts — run validation pipeline | High | Verify prompt quality |
+> **Status:** All priorities below have been completed except P3 (validation pipeline).
+
+| Priority | File | Status |
+|----------|------|--------|
+| **P0** | `github-deployment-guide.prompt.md` + `.claude/commands/github-deployment-guide.md` | Done (PR #96) |
+| **P0** | `.claude/commands/code-review-ansible.md` | Done — merged into `ansible-review.md` (PR #96) |
+| **P1** | `humanizer.prompt.md` + `.claude/commands/humanizer.md` | Done (PR #96) |
+| **P1** | `.claude/commands/github-smallproject-virality.md` | Done — frontmatter added (PR #96) |
+| **P1** | `.claude/commands/github-deployment-guide.md` | Done — frontmatter added (PR #96) |
+| **P2** | `ansible-review.prompt.md` + `.claude/commands/ansible-review.md` | Done (PR #96) |
+| **P2** | `github-smallproject-virality.prompt.md` | Done (PR #96) |
+| **P2** | `GitHub_SmallProject_Trend_Adapter_Skill_2026.md` | Done — moved to `prompts/assets/` (PR #96) |
+| **P3** | All files — second-person → third-person | Done (PR #96) |
+| **P3** | All files — add negative triggers | Done (PR #96) |
+| **P3** | All prompts — run validation pipeline | **Open** |
 
 ---
 
-## Estimated Line Count Impact
+## Line Count Impact (Actual)
 
-| File | Current | After | Reduction |
-|------|--------:|------:|----------:|
-| `humanizer.prompt.md` | 469 | ~80 | -83% |
-| `ansible-review.prompt.md` | 121 | ~100 | -17% |
-| `github-deployment-guide.prompt.md` | 1207 | ~250 | -79% |
-| `github-smallproject-virality.prompt.md` | 45 | ~45 | 0% |
-| `.claude/commands/humanizer.md` | 488 | ~100 | -80% |
-| `.claude/commands/ansible-review.md` | 133 | ~110 | -17% |
-| `.claude/commands/code-review-ansible.md` | 118 | 0 (if merged) | -100% |
-| `.claude/commands/github-deployment-guide.md` | 1207 | ~265 | -78% |
-| `.claude/commands/github-smallproject-virality.md` | 45 | ~60 | +33% |
-| **Total** | **3833** | **~1010** | **-74%** |
+| File | Before | After | Reduction |
+|------|-------:|------:|----------:|
+| `humanizer.prompt.md` | 469 | 101 | -78% |
+| `ansible-review.prompt.md` | 121 | 122 | -1% |
+| `github-deployment-guide.prompt.md` | 1207 | 311 | -74% |
+| `github-smallproject-virality.prompt.md` | 45 | 48 | +7% |
+| `.claude/commands/humanizer.md` | 488 | 112 | -77% |
+| `.claude/commands/ansible-review.md` | 133 | 125 | -6% |
+| `.claude/commands/code-review-ansible.md` | 118 | — | Merged |
+| `.claude/commands/github-deployment-guide.md` | 1207 | 318 | -74% |
+| `.claude/commands/github-smallproject-virality.md` | 45 | 56 | +24% |
+| **Total** | **3833** | **1193** | **-69%** |
 
-> **Note:** The total assumes `code-review-ansible.md` is merged into `ansible-review.md` (Option A). If kept separate with distinct frontmatter (Option B), the total "After" count would be ~1130 lines (-71%). Line counts were verified with `wc -l` at the time of audit.
-
-New reference/asset files (~1800 lines total) would hold the extracted content, loadable on demand.
+Content extracted to `prompts/references/` (14 files) and `prompts/assets/` (4 files), loadable on demand via JiT instructions.
