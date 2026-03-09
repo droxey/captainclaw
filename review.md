@@ -6,12 +6,12 @@ Generated on 2026-03-09 for `droxey/clincher`.
 
 There is **one distinct code-reviewing agent** in this repository, exposed through **two repo artifacts**:
 
-1. **Portable prompt:** `/home/runner/work/clincher/clincher/prompts/ansible-review.prompt.md`
+1. **Portable prompt:** `prompts/ansible-review.prompt.md`
    - Purpose: production-grade Ansible code review for playbooks, roles, and task files
    - Focus: FQCN usage, idempotency, security, handlers, check-mode safety, and testability
    - Intended scope: Ansible only; not for Terraform, Docker-only repos, or general non-Ansible code review
 
-2. **Claude command wrapper:** `/home/runner/work/clincher/clincher/.claude/commands/ansible-review.md`
+2. **Claude command wrapper:** `.claude/commands/ansible-review.md`
    - Purpose: Claude-specific wrapper around the same Ansible review logic
    - Focus: same review criteria as the portable prompt
    - Difference from the prompt: adds Claude metadata such as version and allowed tools
@@ -25,7 +25,7 @@ These repo-native checks were run before compiling the review:
 
 Notes:
 
-- Initial runs failed only because the sandbox was missing the repo's declared tooling (`ansible-lint`, `molecule`); after installing `/home/runner/work/clincher/clincher/requirements.txt` and `/home/runner/work/clincher/clincher/requirements.yml`, the project checks passed.
+- Initial runs failed only because the sandbox was missing the repo's declared tooling (`ansible-lint`, `molecule`); after installing `requirements.txt` and `requirements.yml`, the project checks passed.
 - `make lint` completed successfully.
 - `make test` completed successfully, including project-level and role-level Molecule scenarios.
 
@@ -33,13 +33,13 @@ Notes:
 
 ## Review run 1 — portable prompt
 
-Source instructions: `/home/runner/work/clincher/clincher/prompts/ansible-review.prompt.md`
+Source instructions: `prompts/ansible-review.prompt.md`
 
 ### Verdict
 
 - FAIL
 
-### Top issues first
+### Critical issues
 
 - Severity: blocker
 - File / path: `inventory/caprover-hosts.yml`
@@ -276,13 +276,13 @@ Source instructions: `/home/runner/work/clincher/clincher/prompts/ansible-review
 
 ## Review run 2 — Claude command wrapper
 
-Source instructions: `/home/runner/work/clincher/clincher/.claude/commands/ansible-review.md`
+Source instructions: `.claude/commands/ansible-review.md`
 
 ### Verdict
 
 - FAIL
 
-### Top issues first
+### Critical issues
 
 - Severity: blocker
 - File / path: ansible.cfg; caprover-playbook.yml; .github/workflows/ci.yml
