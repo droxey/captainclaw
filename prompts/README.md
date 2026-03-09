@@ -1,15 +1,42 @@
 # Reusable Prompts
 
-Agent-agnostic prompt files that work with any AI coding assistant and in any repository.
+Agent-agnostic prompt files that work with any AI coding assistant and in any repository. Each prompt uses YAML frontmatter for discoverability and follows progressive disclosure — bulky reference material and examples are extracted to `references/` and `assets/` directories, loaded on demand.
 
 ## Available Prompts
 
 | Prompt | Description |
 | --- | --- |
-| [humanizer.prompt.md](humanizer.prompt.md) | Remove signs of AI-generated writing. Based on Wikipedia's "Signs of AI writing" guide. |
-| [ansible-review.prompt.md](ansible-review.prompt.md) | Production-grade Ansible code review against ansible-lint shared-profile and 2026 best practices. |
+| [humanizer.prompt.md](humanizer.prompt.md) | Remove signs of AI-generated writing. Detects 24 AI patterns from Wikipedia's guide. |
+| [ansible-review.prompt.md](ansible-review.prompt.md) | Production-grade Ansible code review against ansible-lint production profile and 2026 best practices. |
 | [github-deployment-guide.prompt.md](github-deployment-guide.prompt.md) | Generate a complete GitHub deployment guide for an Ansible project. |
 | [github-smallproject-virality.prompt.md](github-smallproject-virality.prompt.md) | Modernize a repo to match 2026 small-project virality patterns. |
+
+## Directory Structure
+
+```text
+prompts/
+├── *.prompt.md           ← portable prompt files (agent-agnostic)
+├── references/           ← reference material loaded on demand (JiT)
+│   ├── ai-writing-patterns.md    ← 24 AI writing patterns with before/after examples
+│   ├── ci-workflow.yml           ← CI orchestrator workflow template
+│   ├── lint-workflow.yml         ← ansible-lint + yamllint workflow
+│   ├── syntax-workflow.yml       ← syntax-check workflow
+│   ├── molecule-workflow.yml     ← Molecule test matrix workflow
+│   ├── deploy-workflow.yml       ← environment-gated deployment workflow
+│   ├── security-workflow.yml     ← CodeQL + dependency-review workflow
+│   ├── drift-workflow.yml        ← cron drift detection workflow
+│   ├── ee-build-workflow.yml     ← Execution Environment build workflow
+│   ├── notify-failure-workflow.yml ← deploy failure notification workflow
+│   ├── vault-oidc-policy.hcl     ← Vault OIDC trust policy
+│   ├── renovate-config.json      ← Renovate Bot configuration
+│   ├── dependabot-config.yml     ← Dependabot configuration
+│   └── copilot-instructions.md   ← GitHub Copilot project instructions
+└── assets/               ← examples and templates loaded on demand
+    ├── humanizer-example.md      ← full worked example for the humanizer
+    ├── pr-template.md            ← pull request template
+    ├── issue-template-deploy-failure.yml ← deploy failure issue template
+    └── GitHub_SmallProject_Trend_Adapter_Skill_2026.md ← generated skill output
+```
 
 ## Using Across Repos
 
@@ -88,16 +115,23 @@ Reference prompts by raw URL in your agent's skill configuration, or include the
 
 ## File Format
 
-Each `.prompt.md` file is plain Markdown with no agent-specific frontmatter. This makes them portable across tools. The format is:
+Each `.prompt.md` file includes optional YAML frontmatter with `name` and `description` fields for agent discoverability. Agents that do not parse frontmatter will ignore it. The format is:
 
 ```markdown
+---
+name: prompt-name
+description: |
+  What the prompt does. When to use it.
+  When NOT to use it (negative triggers).
+---
+
 # Prompt Title
 
-Role and task description.
+Task description and procedure.
 
 ## Sections
 
-Instructions, examples, constraints...
+Instructions, checklists, references...
 ```
 
-Placeholders like `{{PASTE_ANSIBLE_CODE_HERE}}` indicate where to insert your input. Replace them with the actual content when using the prompt.
+Prompts reference content in `references/` and `assets/` using relative paths (e.g., "Read `references/ai-writing-patterns.md` for the complete pattern catalog"). Placeholders like `{{ANSIBLE_CODE}}` indicate where to insert input.
