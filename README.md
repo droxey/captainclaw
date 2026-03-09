@@ -1694,7 +1694,7 @@ EOF
 docker compose -f docker-compose.yml -f compose.caddy.yml up -d
 ```
 
-> **Why a separate file?** Appending YAML with `cat >>` breaks the document structure. A Compose override file (`-f`) is the idiomatic way to layer services. The `proxy-net` is declared `external` so it references the network already created by the base compose file.
+> **Why a separate file?** Appending YAML with `cat >>` breaks the document structure. A Compose override file (`-f`) is the idiomatic way to layer services. Both `proxy-net` and `ingress-net` are declared `external` so they reference networks already created by the base compose file.
 
 #### Option B: Cloudflare Tunnel (Maximum Security — No Open Ports)
 
