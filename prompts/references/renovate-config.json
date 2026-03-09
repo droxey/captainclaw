@@ -1,0 +1,28 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "ansible": {
+    "enabled": true
+  },
+  "packageRules": [
+    {
+      "matchManagers": ["ansible-galaxy"],
+      "automerge": false,
+      "labels": ["dependencies", "ansible-galaxy"],
+      "commitMessagePrefix": "chore(deps): "
+    },
+    {
+      "matchManagers": ["github-actions"],
+      "automerge": false,
+      "pinDigests": true,
+      "labels": ["dependencies", "github-actions"],
+      "commitMessagePrefix": "chore(deps): "
+    },
+    {
+      "matchManagers": ["pip_requirements"],
+      "automerge": false,
+      "labels": ["dependencies", "python"],
+      "commitMessagePrefix": "chore(deps): "
+    }
+  ]
+}

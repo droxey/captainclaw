@@ -1,0 +1,23 @@
+# .github/dependabot.yml
+# Weekly PRs for GitHub Actions SHA bumps and pip (Ansible tools) updates.
+# Galaxy collection bumps are handled by Renovate Bot (see renovate.json) —
+# Dependabot does not natively support ansible-galaxy as of March 2026.
+
+version: 2
+
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "chore(deps)"
+    labels: ["dependencies", "github-actions"]
+
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "chore(deps)"
+    labels: ["dependencies", "python"]

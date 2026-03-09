@@ -1,0 +1,32 @@
+# .github/workflows/ci.yml
+# Orchestrates lint → syntax → molecule on every PR and push to main.
+# All jobs call reusable workflows to keep this file < 30 lines.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel in-flight runs for the same branch when a new push arrives.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    uses: ./.github/workflows/_lint.yml
+    secrets: inherit
+
+  syntax:
+    uses: ./.github/workflows/_syntax.yml
+    secrets: inherit
+
+  molecule:
+    needs: [lint, syntax]
+    uses: ./.github/workflows/_molecule.yml
+    with:
+      scenario-matrix: '["default", "hardened"]'
+    secrets: inherit

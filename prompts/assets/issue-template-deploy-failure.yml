@@ -1,0 +1,22 @@
+name: Deploy Failure
+description: Report a failed deployment
+labels: ["deploy-failure", "incident"]
+body:
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      options: [staging, production]
+    validations:
+      required: true
+  - type: input
+    id: run-url
+    attributes:
+      label: GitHub Actions run URL
+    validations:
+      required: true
+  - type: textarea
+    id: error-output
+    attributes:
+      label: Error output
+      render: shell

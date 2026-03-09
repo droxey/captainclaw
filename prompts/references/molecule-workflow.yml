@@ -1,0 +1,50 @@
+# .github/workflows/_molecule.yml
+# Reusable workflow: runs Molecule scenarios in a matrix.
+# Caches pip install and Galaxy collections between runs.
+
+name: Molecule
+
+on:
+  workflow_call:
+    inputs:
+      scenario-matrix:
+        description: "JSON array of Molecule scenario names"
+        type: string
+        default: '["default"]'
+
+jobs:
+  molecule:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: ${{ fromJSON(inputs.scenario-matrix) }}
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Cache Ansible collections
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684  # v4.2.1
+        with:
+          path: ~/.ansible/collections
+          key: ansible-collections-${{ hashFiles('requirements.yml') }}
+
+      - name: Install Molecule + dependencies
+        run: |
+          pip install molecule==25.3.0 molecule-plugins[docker]==23.7.0 \
+            ansible-core==2.20.0 ansible-lint==25.4.0
+
+      - name: Install Ansible collections
+        run: ansible-galaxy collection install -r requirements.yml
+
+      - name: Run Molecule — ${{ matrix.scenario }}
+        run: molecule test --scenario-name ${{ matrix.scenario }}
+        env:
+          PY_COLORS: "1"
+          ANSIBLE_FORCE_COLOR: "1"

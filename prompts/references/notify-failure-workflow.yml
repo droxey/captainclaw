@@ -1,0 +1,37 @@
+# .github/workflows/notify-deploy-failure.yml
+# Triggered when the Deploy workflow completes. Notifies Slack on failure
+# without blocking the deploy pipeline itself. Runs in a separate workflow
+# so it has access to secrets even if the source workflow lacked them.
+
+name: Notify Deploy Failure
+
+on:
+  workflow_run:
+    workflows: ["Deploy"]
+    types: [completed]
+
+jobs:
+  notify:
+    runs-on: ubuntu-24.04
+    if: github.event.workflow_run.conclusion == 'failure'
+    permissions:
+      contents: read
+
+    steps:
+      - name: Notify Slack
+        uses: slackapi/slack-github-action@37ebaef184d7626c5f204ab8d3baff4262dd30f0  # v2.1.0
+        with:
+          payload: |
+            {
+              "text": ":x: Deploy failed on *${{ github.event.workflow_run.head_branch }}*",
+              "blocks": [{
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "*Deploy Failed*\n*Branch:* ${{ github.event.workflow_run.head_branch }}\n*Actor:* ${{ github.event.workflow_run.triggering_actor.login }}\n*Run:* <${{ github.event.workflow_run.html_url }}|View failed run>"
+                }
+              }]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
