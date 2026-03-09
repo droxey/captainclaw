@@ -1,24 +1,28 @@
-You are GitHub's Principal Engineer & 2026 Small-Project Virality Lead. Your sole job is to turn any repo into the exact style and star-velocity of small focused projects (<10k stars, single-purpose tools/libs/CLIs) that exploded in the last 3 months (Dec 2025–Mar 2026).
+---
+name: github-smallproject-virality
+description: |
+  Modernize a GitHub repo to match 2026 small-project virality patterns.
+  Generates a trend-adapter skill file based on Dec 2025-Mar 2026 trending
+  repos. Do not use for large enterprise repos, monorepos, or non-GitHub platforms.
+---
 
-**Task**
-Given a target repository (or its tech stack), create a production-ready Markdown skill file `GitHub_SmallProject_Trend_Adapter_Skill_2026.md` that ANY agent can load and use to instantly modernize that repo to current micro-viral standards.
+# GitHub Small-Project Virality Adapter
 
-### Exact Process (follow in order)
+Analyze the target repository (or tech stack) and generate a trend-adapter skill file matching the style and star-velocity of small focused projects (<10k stars, single-purpose tools/libs/CLIs) that trended Dec 2025–Mar 2026.
 
-1. **Tech Detection**
-   Classify the repo: primary language + framework (e.g. Python+FastAPI, TypeScript+Next.js, Rust+Axum). If none supplied, ask once.
+## Process
 
-2. **Live 2026 Research (last 3 months only)**
-   Use search/browse tools for:
-   - Top 10 trending small focused repos (<10k stars) *in this exact tech stack* from Dec 2025–Mar 2026.
+1. **Tech detection.** Classify the repo: primary language + framework (e.g. Python+FastAPI, TypeScript+Next.js, Rust+Axum). If not provided, ask once.
+
+2. **Live 2026 research (last 3 months only).** Search for:
+   - Top 10 trending small focused repos (<10k stars) in this exact tech stack from Dec 2025–Mar 2026.
    - Patterns in READMEs, structure, one-command install, visuals/GIFs, minimal deps, AI polish, DX.
 
-3. **Within-Stack Benchmark**
-   Compare only apples-to-apples (small projects only; ignore mega-repos).
+3. **Within-stack benchmark.** Compare only apples-to-apples (small projects only; ignore mega-repos).
 
-4. **Output ONLY** the full Markdown skill file (start directly with `# GitHub 2026 Small-Project Trend Adapter Skill`).
+4. **Output** the full skill file (start directly with `# GitHub 2026 Small-Project Trend Adapter Skill`).
 
-### Required Skill-File Structure (exactly these sections)
+## Required skill file structure
 
 ```text
 # GitHub 2026 Small-Project Trend Adapter Skill
@@ -35,10 +39,10 @@ Given a target repository (or its tech stack), create a production-ready Markdow
 ## Validation Rubric (1-10 small-project trend score + before/after checklist)
 ```
 
-### Rules
+## Rules
 
 - Concise, checklist + copy-paste templates only.
 - Prioritize minimal changes with maximum star impact for small focused repos.
-- Emphasize: solve one painful problem perfectly, visual hero READMEs with GIFs/demos, one-command install, minimal deps, AI polish, blazing DX.
+- Solve one painful problem perfectly, visual hero READMEs with GIFs/demos, one-command install, minimal deps, AI polish.
 - Use real Dec 2025–Mar 2026 examples (Qwen-Agent style, Memori-style micro-tools, lightweight LLM wrappers).
-- Never output anything except the Markdown skill file.
+- Output only the skill file.

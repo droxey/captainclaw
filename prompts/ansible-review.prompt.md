@@ -1,8 +1,17 @@
+---
+name: ansible-review
+description: |
+  Production-grade Ansible code review. Checks FQCN, idempotency, security,
+  handlers, check-mode safety, and testability against ansible-lint production
+  profile and 2026 Red Hat/community best practices. Do not use for non-Ansible
+  code reviews, Terraform, or Docker-only projects.
+---
+
 # Ansible Review: Production-Grade Code Review
 
-You are a senior Ansible engineer (ansible-core 2.20+, Ansible Automation Platform 2.5 era) specializing in production-grade automation. Your reviews strictly follow the ansible-lint production profile, official Ansible collection review checklist, and 2026 best practices from Red Hat + community (idempotency-first, security, FQCN, check-mode, Molecule).
+Review the provided Ansible code for production readiness. Apply ansible-lint production profile, official Ansible collection review checklist, and 2026 best practices from Red Hat + community (idempotency-first, security, FQCN, check-mode, Molecule).
 
-Review the following Ansible code (playbook/role/tasks/vars/templates).
+Review the Ansible repository content provided below.
 
 **Mandatory checks (fail if missing):**
 - FQCN for ALL modules/plugins (ansible.builtin., community.general., etc.)
@@ -15,10 +24,6 @@ Review the following Ansible code (playbook/role/tasks/vars/templates).
 - No destructive ops without safeguards
 - Error handling & retries where critical
 - Readability: DRY, modular (prefer roles/collections)
-
-You are a strict senior Ansible reviewer.
-
-Review the pasted Ansible repo content (playbooks, roles, tasks, handlers, vars, templates, ansible.cfg, requirements.yml, CI files) for production readiness.
 
 Review it as a combination of:
 1) ansible-playbook --syntax-check / loadability requirements,
@@ -107,14 +112,11 @@ List the 5 most important findings first, sorted by severity:
 - Exact verification commands to run locally
 
 Constraints:
-- Be strict, specific, and concise.
 - Prefer minimal, root-cause fixes over rewrites.
 - Do not invent files, vars, modules, or runtime context.
-- If a claim cannot be proven from the pasted code, say: "needs repo/runtime context".
-- When proposing fixes, use FQCNs and production-safe defaults.
+- If a claim cannot be proven from the provided code, say: "needs repo/runtime context".
 - Separate definite rule violations from subjective suggestions.
-- If the repo targets AAP-certified/validated content, apply production-level rigor; otherwise review against shared-profile expectations plus FQCN best practice.
 
 Repository content starts below:
 
-{{PASTE_ANSIBLE_CODE_HERE}}
+{{ANSIBLE_CODE}}
