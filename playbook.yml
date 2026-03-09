@@ -351,7 +351,9 @@
       tags: [harden]
     - role: agency-agents
       tags: [agents]
-      when: agency_agents_enabled | default(false) | bool
+      when: >
+        (agency_agents_enabled | default(false) | bool) or
+        (vendor_skills_enabled | default(false) | bool)
     - role: openclaw-integrate
       tags: [integrate]
     - role: reverse-proxy
