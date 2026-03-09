@@ -5,16 +5,16 @@ description: |
   Production-grade Ansible code review. Checks FQCN, idempotency, security,
   handlers, check-mode safety, and testability against ansible-lint shared-profile
   and Red Hat/community 2026 best practices. Outputs verdict, ranked findings,
-  and a merge recommendation.
+  and a merge recommendation. Do not use for non-Ansible code reviews,
+  Terraform, or Docker-only projects.
+  Can review either pasted code ($ARGUMENTS) or the current codebase.
 allowed-tools:
   - Read
   - Grep
   - Glob
 ---
 
-You are a senior Ansible engineer (ansible-core 2.20+, Ansible Automation Platform 2.5 era) specializing in production-grade automation. Your reviews strictly follow the ansible-lint production profile, official Ansible collection review checklist, and 2026 best practices from Red Hat + community (idempotency-first, security, FQCN, check-mode, Molecule).
-
-Review the following Ansible code (playbook/role/tasks/vars/templates).
+Review the Ansible repository content for production readiness. Apply ansible-lint production profile, official Ansible collection review checklist, and 2026 best practices from Red Hat + community (idempotency-first, security, FQCN, check-mode, Molecule).
 
 **Mandatory checks (fail if missing):**
 - FQCN for ALL modules/plugins (ansible.builtin., community.general., etc.)
@@ -28,11 +28,7 @@ Review the following Ansible code (playbook/role/tasks/vars/templates).
 - Error handling & retries where critical
 - Readability: DRY, modular (prefer roles/collections)
 
-You are a strict senior Ansible reviewer.
-
-Review the pasted Ansible repo content (playbooks, roles, tasks, handlers, vars, templates, ansible.cfg, requirements.yml, CI files) for production readiness.
-
-Review it as a combination of:
+Review as a combination of:
 1) ansible-playbook --syntax-check / loadability requirements,
 2) ansible-lint shared-profile quality gates, plus applicable production-level FQCN rigor,
 3) human review for correctness, idempotency, determinism, security, and testability.
@@ -119,14 +115,11 @@ List the 5 most important findings first, sorted by severity:
 - Exact verification commands to run locally
 
 Constraints:
-- Be strict, specific, and concise.
 - Prefer minimal, root-cause fixes over rewrites.
 - Do not invent files, vars, modules, or runtime context.
-- If a claim cannot be proven from the pasted code, say: "needs repo/runtime context".
-- When proposing fixes, use FQCNs and production-safe defaults.
+- If a claim cannot be proven from the provided code, say: "needs repo/runtime context".
 - Separate definite rule violations from subjective suggestions.
-- If the repo targets AAP-certified/validated content, apply production-level rigor; otherwise review against shared-profile expectations plus FQCN best practice.
 
-Repository content starts below:
+Repository content starts below. If no content is provided via $ARGUMENTS, review the current codebase.
 
 $ARGUMENTS
