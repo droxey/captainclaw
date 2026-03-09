@@ -75,3 +75,77 @@
 - name: Show deployed agent count
   ansible.builtin.debug:
     msg: "Deployed {{ deployed_agents.stdout_lines | length }} agency-agents prompt files across {{ agency_agents_divisions | length }} divisions"
+
+# ── Vendor Skills (from awesome-agent-skills) ─────────────────────────────
+- name: Create vendor skill staging directories on host
+  ansible.builtin.file:
+    path: "{{ openclaw_base_dir }}/agency-agents/vendor/{{ item.name }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop: "{{ vendor_skills }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: vendor_skills_enabled | default(false) | bool
+
+- name: Clone vendor skill repositories
+  ansible.builtin.git:
+    repo: "{{ item.repo }}"
+    dest: "{{ openclaw_base_dir }}/agency-agents/vendor/{{ item.name }}/repo"
+    version: "{{ item.version }}"
+    depth: 1
+    force: true
+  loop: "{{ vendor_skills }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: vendor_clone
+  retries: 3
+  delay: 10
+  until: vendor_clone is not failed
+  when: vendor_skills_enabled | default(false) | bool
+
+- name: Create vendor skills directory inside container
+  ansible.builtin.command: >
+    docker exec openclaw mkdir -p /root/.openclaw/agents/vendor/{{ item.name }}
+  loop: "{{ vendor_skills }}"
+  loop_control:
+    label: "{{ item.name }}"
+  changed_when: false
+  when: vendor_skills_enabled | default(false) | bool
+
+- name: Copy vendor skills into container
+  # Trailing slash on source copies the *contents* of the subdir (individual skill
+  # folders) into the per-vendor destination directory, not the subdir itself.
+  ansible.builtin.command: >
+    docker cp
+    {{ openclaw_base_dir }}/agency-agents/vendor/{{ item.name }}/repo/{{ item.subdir }}/
+    openclaw:/root/.openclaw/agents/vendor/{{ item.name }}
+  loop: "{{ vendor_skills }}"
+  loop_control:
+    label: "{{ item.name }}"
+  changed_when: false
+  when: vendor_skills_enabled | default(false) | bool
+
+- name: Set permissions on vendor skills inside container
+  ansible.builtin.command: "docker exec openclaw {{ item }}"
+  loop:
+    - chmod -R 700 /root/.openclaw/agents/vendor
+    - sh -c 'find /root/.openclaw/agents/vendor -type f -exec chmod 600 {} \;'
+  changed_when: false
+  when: vendor_skills_enabled | default(false) | bool
+
+- name: List deployed vendor skill files
+  ansible.builtin.command: >
+    docker exec openclaw find /root/.openclaw/agents/vendor -name '*.md' -type f
+  register: deployed_vendor_skills
+  changed_when: false
+  when: vendor_skills_enabled | default(false) | bool
+
+- name: Show deployed vendor skill count
+  ansible.builtin.debug:
+    msg: >
+      Deployed {{ deployed_vendor_skills.stdout_lines | length }} vendor skill files
+      across {{ vendor_skills | length }} vendors
+      ({{ vendor_skills | map(attribute='name') | join(', ') }})
+  when: vendor_skills_enabled | default(false) | bool

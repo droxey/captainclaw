@@ -161,6 +161,52 @@ agency_agents_divisions:
   - spatial-computing
   - specialized
 
+# ── Vendor Skills (from awesome-agent-skills) ─────────────────────────
+# Official skills from Anthropic, Vercel, Stripe, Cloudflare, HashiCorp, and
+# Google Workspace. Sourced via https://github.com/VoltAgent/awesome-agent-skills
+# Each entry defines the repo URL, pinned commit SHA, and the subdirectory within
+# the repo that contains individual skill folders.
+# Deployed into /root/.openclaw/agents/vendor/<name>/ inside the container.
+# Pin to commit SHA for reproducible deploys — git tags can be force-pushed.
+vendor_skills_enabled: true
+vendor_skills:
+  - name: anthropic
+    repo: "https://github.com/anthropics/skills.git"
+    # SHA is HEAD of main as of 2026-03-06. To update:
+    #   git ls-remote https://github.com/anthropics/skills refs/heads/main
+    version: "b0cbd3df1533b396d281a6886d5132f623393a9c"
+    subdir: "skills"
+  - name: vercel
+    repo: "https://github.com/vercel-labs/agent-skills.git"
+    # SHA is HEAD of main as of 2026-03-06. To update:
+    #   git ls-remote https://github.com/vercel-labs/agent-skills refs/heads/main
+    version: "64bee5b7ea30702448e2aed774eb361914029944"
+    subdir: "skills"
+  - name: stripe
+    repo: "https://github.com/stripe/ai.git"
+    # SHA is HEAD of main as of 2026-03-05. To update:
+    #   git ls-remote https://github.com/stripe/ai refs/heads/main
+    version: "be309fff3ba77aa47d0a6b96fd4ca24b6a4d0501"
+    subdir: "skills"
+  - name: cloudflare
+    repo: "https://github.com/cloudflare/skills.git"
+    # SHA is HEAD of main as of 2026-03-03. To update:
+    #   git ls-remote https://github.com/cloudflare/skills refs/heads/main
+    version: "d3113039790f64e052ff80f351190da65e9b7510"
+    subdir: "skills"
+  - name: hashicorp
+    repo: "https://github.com/hashicorp/agent-skills.git"
+    # SHA is HEAD of main as of 2026-03-04. To update:
+    #   git ls-remote https://github.com/hashicorp/agent-skills refs/heads/main
+    version: "876a095c71079e4c112fb1de2f1a66dca0ffea23"
+    subdir: "terraform"
+  - name: google-workspace
+    repo: "https://github.com/googleworkspace/cli.git"
+    # SHA is HEAD of main as of 2026-03-09. To update:
+    #   git ls-remote https://github.com/googleworkspace/cli refs/heads/main
+    version: "643fb7a9514e1f8e4d6ea94de81793638f6dc2df"
+    subdir: "skills"
+
 # ── Channel ──────────────────────────────────────────────────────────
 telegram_enabled: true
 # telegram_bot_token lives in vault.yml
