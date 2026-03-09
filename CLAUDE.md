@@ -37,6 +37,7 @@ clincher/
 ├── README.md                    # Primary artifact: 14-step deployment guide + Ansible docs
 ├── USECASES.md                  # Community use cases and example deployments
 ├── LINKS.md                     # Curated links to skills, use cases, community resources
+├── PROMPT_IMPROVEMENTS.md       # Audit of prompts/skills against skills-best-practices
 ├── prompts/                     # Agent-agnostic reusable prompts (see prompts/README.md)
 │   ├── README.md                # Index + cross-repo/cross-agent usage instructions
 │   ├── humanizer.prompt.md      # Remove AI writing patterns from text
@@ -44,6 +45,7 @@ clincher/
 │   ├── github-deployment-guide.prompt.md
 │   └── github-smallproject-virality.prompt.md
 ├── .claude/
+│   ├── commands/                # Claude Code slash commands (skill wrappers)
 │   └── settings.local.json      # Claude Code permissions and output style config
 ├── ansible.cfg                  # SSH pipelining, YAML output, retry config
 ├── requirements.yml             # Galaxy collections (community.docker, community.general)
@@ -209,6 +211,71 @@ curl -I https://openclaw.yourdomain.com
 2. **`openclaw-net` must be `internal: true`**: Without this, containers on this network can reach the internet directly, bypassing the egress proxy
 3. **Missing `depends_on` health conditions**: If the socket proxy or egress proxy isn't healthy before OpenClaw starts, it will fail to connect
 4. **Egress whitelist too broad**: Only add domains the agent genuinely needs. Each whitelisted domain is a potential data exfiltration channel
+
+---
+
+## Skill & Prompt Authoring
+
+When creating or editing skills (`prompts/*.prompt.md`) and Claude commands (`.claude/commands/*.md`), follow the best practices from [mgechev/skills-best-practices](https://github.com/mgechev/skills-best-practices). These principles apply to both full agent skills and standalone prompts.
+
+### Structure
+
+Skills use a flat directory layout:
+
+```
+skill-name/
+├── SKILL.md              # Required: metadata + core instructions (<500 lines)
+├── scripts/              # Deterministic CLI tools (Python/Bash)
+├── references/           # Supplementary context (schemas, cheatsheets)
+└── assets/               # Templates or static files used in output
+```
+
+Standalone prompts in `prompts/` and `.claude/commands/` follow the same principles without the directory wrapper.
+
+### Frontmatter
+
+The `name` and `description` fields are the only metadata the agent sees before triggering a skill.
+
+- **Name**: 1–64 characters, lowercase letters, numbers, and single hyphens only. For skills, must match the parent directory name. For standalone prompts, use kebab-case with a `.prompt.md` extension.
+- **Description**: Max 1,024 characters. Write in third person. Include negative triggers to prevent false matches.
+  - **Bad**: `"Ansible skills."`
+  - **Good**: `"Reviews Ansible playbooks, roles, and task files for production readiness. Use when the user asks for an Ansible code review. Don't use for Terraform, Puppet, or shell scripts."`
+
+### Progressive Disclosure
+
+Keep the context window lean by loading information only when needed.
+
+1. Keep the main file under **500 lines**. Offload bulky content to `references/` or `assets/`.
+2. Use **flat subdirectories** — one level deep only (e.g., `references/schema.md`, not `references/db/v1/schema.md`).
+3. Use **just-in-time loading** — instruct the agent to read a file only when that context is needed (e.g., *"Read `references/auth-flow.md` for error codes"*).
+4. Use **relative paths** with forward slashes, regardless of OS.
+5. Do not create documentation cruft inside skills — no `README.md`, `CHANGELOG.md`, or `INSTALLATION_GUIDE.md`.
+
+### Procedural Instructions
+
+Write instructions for LLMs, not humans.
+
+1. Use **numbered step-by-step sequences**. Map decision trees explicitly (e.g., *"Step 2: If source maps are needed, run `ng build --source-map`. Otherwise, skip to Step 3."*).
+2. Write in the **third-person imperative** — *"Extract the text…"* not *"You should extract…"* or *"I will extract…"*.
+3. Provide **concrete templates** in `assets/` instead of prose descriptions. Agents pattern-match well against templates.
+4. Use **identical terminology** — pick one term per concept and use it everywhere. Prefer domain-native vocabulary (e.g., "template" not "markup" in Angular).
+
+### Deterministic Scripts
+
+Offload fragile or repetitive operations to tested scripts in `scripts/`.
+
+- Scripts communicate success/failure via stdout/stderr.
+- Write descriptive, human-readable error messages so the agent can self-correct without user intervention.
+- Do not bundle library code in skills — reference existing tools or write single-purpose scripts.
+
+### Validation
+
+Validate skills by testing four dimensions with an LLM:
+
+1. **Discovery** — paste frontmatter into a fresh LLM chat and verify it triggers on the right prompts and rejects wrong ones.
+2. **Logic** — simulate step-by-step execution and flag any point where the agent is forced to guess.
+3. **Edge cases** — have the LLM attack the logic for failure states, missing fallbacks, and implicit assumptions.
+4. **Architecture** — enforce progressive disclosure by extracting dense content to `references/` and keeping the main file lean.
 
 ---
 
