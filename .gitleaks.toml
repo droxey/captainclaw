@@ -23,5 +23,4 @@ title = "clincher gitleaks config"
     '''YOUR_TELEGRAM_BOT_TOKEN''',
     '''YOUR_TUNNEL_TOKEN''',
     '''xoxb-YOUR-SLACK-BOT-TOKEN''',
-    '''sk-ant-\.{3}''',
   ]
