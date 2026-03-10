@@ -120,7 +120,7 @@ jobs:
 
   docker:
     name: Docker Build and Push
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [lint, syntax]
     if: vars.DOCKERHUB_USERNAME != ''
     steps:
