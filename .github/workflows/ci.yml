@@ -122,7 +122,10 @@ jobs:
     name: Docker Build and Push
     runs-on: ubuntu-latest
     needs: [lint, syntax]
-    if: vars.DOCKERHUB_USERNAME != ''
+    if: >
+      vars.DOCKERHUB_USERNAME != '' &&
+      (github.event_name == 'push' ||
+       github.event.pull_request.head.repo.full_name == github.repository)
     steps:
       - name: Checkout
         uses: actions/checkout@v4
