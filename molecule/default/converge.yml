@@ -20,6 +20,8 @@
     ssh_port: 9922
     local_ssh_key_path: "/tmp/molecule-test-key"
     openclaw_base_dir: /opt/openclaw
+    agent_orchestrator_enabled: true
+    github_token: "ghp_test-token-for-molecule"
 
   tasks:
     # ── Variable validation (mirrors playbook.yml pre_tasks) ──────────
@@ -59,6 +61,15 @@
         that:
           - domain != 'openclaw.yourdomain.com'
         fail_msg: "domain must be set to your actual domain in vars.yml"
+
+    - name: Ensure GitHub token is set when agent orchestrator is enabled
+      ansible.builtin.assert:
+        that:
+          - github_token is defined
+          - github_token | length > 0
+          - github_token != 'ghp_your-token-here'
+        fail_msg: "github_token must be set in vault.yml when agent_orchestrator_enabled is true"
+      when: agent_orchestrator_enabled | default(false) | bool
 
     # ── Required internal secrets (mirrors playbook.yml pre_tasks) ─────
     - name: Verify all required internal secrets are populated
