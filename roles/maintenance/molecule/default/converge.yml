@@ -11,9 +11,9 @@
     openclaw_base_dir: /tmp/molecule-maintenance
 
     # Secrets (test values)
-    backup_encryption_key: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-    gateway_token: "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
-    litellm_master_key: "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+    backup_encryption_key: "test-fixture-backup-encryption-key-00000000000000000000000000000"
+    gateway_token: "test-fixture-gateway-token-0000000000000000000000000000000000000"
+    litellm_master_key: "test-fixture-litellm-key-000000000000000000000000000000000000000"
 
     # Maintenance config
     backup_retention_days: 14

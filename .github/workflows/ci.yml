@@ -15,6 +15,20 @@ permissions:
   contents: read
 
 jobs:
+  secrets:
+    name: Secret Scan
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   lint:
     name: Lint
     runs-on: ubuntu-24.04
@@ -85,6 +99,10 @@ jobs:
             role: reverse-proxy
           - scenario: default
             role: maintenance
+          - scenario: default
+            role: monitoring
+          - scenario: default
+            role: convenience
           - scenario: caprover
             role: ""
     steps:
@@ -119,7 +137,7 @@ jobs:
   docker:
     name: Docker Build and Push
     runs-on: ubuntu-24.04
-    needs: [lint, syntax, molecule]
+    needs: [lint, syntax, molecule, secrets]
     if: vars.DOCKERHUB_USERNAME != ''
     steps:
       - name: Checkout

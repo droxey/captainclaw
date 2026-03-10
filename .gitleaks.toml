@@ -1,0 +1,26 @@
+# Gitleaks configuration — secret scanning for CI and local use.
+# https://github.com/gitleaks/gitleaks#configuration
+
+title = "clincher gitleaks config"
+
+[allowlist]
+  description = "Known placeholder and test-fixture patterns"
+
+  # Files that intentionally contain example/test credentials
+  paths = [
+    '''group_vars/all/vault\.yml\.example''',
+    '''molecule/.*/converge\.yml''',
+    '''roles/.*/molecule/.*/converge\.yml''',
+  ]
+
+  # Placeholder strings that appear in docs and validation assertions
+  regexes = [
+    '''sk-ant-your-key-here''',
+    '''sk-ant-test-key-for-molecule''',
+    '''pa-your-key-here''',
+    '''pa-test-key-for-molecule''',
+    '''sk-your-key-here''',
+    '''YOUR_TELEGRAM_BOT_TOKEN''',
+    '''YOUR_TUNNEL_TOKEN''',
+    '''xoxb-YOUR-SLACK-BOT-TOKEN''',
+  ]
