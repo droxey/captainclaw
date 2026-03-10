@@ -1,5 +1,15 @@
 # OpenClaw Single-Server — AI Assistant Guide
 
+Be concise in initial responses. Start with the action plan (3-5 bullet points max), then execute. Do not give lengthy explanations before starting work.
+
+## Workflow
+
+When fixing lint or check errors, always read the full log file first before proposing fixes. Run `make check` (or equivalent) after each fix to verify resolution.
+
+## Important Constraints
+
+Never attempt to run `claude` CLI commands from within an active Claude Code session. For MCP server setup or CLI config changes, provide the user with the exact command to run themselves in a separate terminal.
+
 ## Context Management
 
 Use subagents (Agent tool) to protect main context from verbose operations.
