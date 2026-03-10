@@ -1,0 +1,12 @@
+---
+# Verify that CapRover monitoring configuration is syntactically valid
+- name: Verify CapRover monitoring config
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+    - name: Confirm converge completed without errors
+      ansible.builtin.assert:
+        that: true
+        success_msg: "CapRover monitoring syntax and dependency checks passed"

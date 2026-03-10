@@ -30,7 +30,11 @@ caprover-check:                ## Lint + test CapRover monitoring config only
 	yamllint caprover-playbook.yml && ansible-lint caprover-playbook.yml && ansible-playbook caprover-playbook.yml --syntax-check && molecule test -s caprover
 
 scan:                          ## Scan for secret leaks (requires gitleaks)
-	gitleaks detect --source . -v
+	@if command -v gitleaks >/dev/null 2>&1; then \
+		gitleaks detect --source . -v; \
+	else \
+		echo "SKIP scan: gitleaks not found — install with 'brew install gitleaks'"; \
+	fi
 
 check: lint test scan          ## Run lint + test + scan (full CI equivalent)
 

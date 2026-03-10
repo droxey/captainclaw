@@ -3,7 +3,10 @@
     "allow": [
       "Bash(git add:*)",
       "Bash(source:*)",
-      "Bash(make help:*)"
+      "Bash(make help:*)",
+      "Bash(molecule test:*)",
+      "Bash(python3:*)",
+      "Bash(pip3 list:*)"
     ]
   },
   "outputStyle": "Explanatory"
