@@ -3410,15 +3410,3 @@ A `.vscode/mcp.json` file is included in this repository. It registers the OpenC
 ---
 
 **Done.** Deploy with `docker compose up -d` (Step 4), apply hardening (Step 5), configure API keys and channels (Steps 6-7), set up your reverse proxy (Step 9), verify (Step 10), then configure backups (Step 11). When you hit capacity limits, follow the scaling phases in Step 14.
-
----
-
-## Star History
-
-<a href="https://star-history.com/#droxey/clincher&Date">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=droxey/clincher&type=Date&theme=dark" />
-    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=droxey/clincher&type=Date" />
-    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=droxey/clincher&type=Date" />
-  </picture>
-</a>
