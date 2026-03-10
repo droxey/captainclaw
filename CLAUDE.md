@@ -66,12 +66,12 @@ graph TB
         LLM["💬 litellm<br/>LLM routing + cost controls"]
         REDIS["🗄️ redis<br/>RediSearch semantic cache"]
         EGRESS["🚪 openclaw-egress<br/>Smokescreen egress whitelist"]
+    end
 
-        subgraph MON ["📊 monitoring · optional"]
-            PROM["📈 prometheus<br/>metrics · 14d retention"]
-            GRAF["📉 grafana<br/>dashboards + alerts"]
-            REXP["📡 redis-exporter<br/>Redis metrics"]
-        end
+    subgraph MON ["📊 monitoring · optional · external"]
+        PROM["📈 prometheus<br/>metrics · 14d retention"]
+        GRAF["📉 grafana<br/>dashboards + alerts"]
+        REXP["📡 redis-exporter<br/>Redis metrics"]
     end
 
     SOCK["🔌 /var/run/docker.sock<br/>read-only"]
@@ -86,9 +86,9 @@ graph TB
     LLM --> EGRESS
     DP --> SOCK
     EGRESS -->|egress-net| LLMAPI
-    PROM -.->|scrape :4000| LLM
-    PROM -.->|scrape :9121| REXP
-    REXP -.-> REDIS
+    PROM -.->|openclaw-net| LLM
+    PROM -.->|openclaw-net| REXP
+    REXP -.->|openclaw-net| REDIS
     GRAF -.-> PROM
 
     classDef external fill:#f9f0ff,stroke:#9b59b6,stroke-width:2px,color:#333
@@ -104,7 +104,7 @@ graph TB
     class SOCK infra
 ```
 
-Three bridge networks enforce least-privilege. `openclaw-net` is `internal: true` — no direct internet. Egress proxy bridges internal/external for whitelisted LLM calls only.
+Three bridge networks enforce least-privilege. `openclaw-net` is `internal: true` — no direct internet. Egress proxy bridges internal/external for whitelisted LLM calls only. Monitoring services run outside the internal network and attach to `openclaw-net` only to scrape metrics.
 
 ### Services
 
@@ -121,7 +121,7 @@ Three bridge networks enforce least-privilege. `openclaw-net` is `internal: true
 
 ### Networks
 
-- **`openclaw-net`**: Internal bridge — no internet access. All core and monitoring services attach to this.
+- **`openclaw-net`**: Internal bridge — no internet access. Core services live here; monitoring services attach to scrape metrics.
 - **`egress-net`**: Bridges egress proxy to internet for whitelisted LLM API calls.
 - **`proxy-net`**: Connects reverse proxy to the OpenClaw gateway and Grafana.
 

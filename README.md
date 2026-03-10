@@ -161,12 +161,12 @@ graph TB
         LLM["💬 litellm<br/>LLM routing + cost controls"]
         REDIS["🗄️ redis<br/>RediSearch semantic cache"]
         EGRESS["🚪 openclaw-egress<br/>Smokescreen egress whitelist"]
+    end
 
-        subgraph MON ["📊 monitoring · optional"]
-            PROM["📈 prometheus<br/>metrics · 14d retention"]
-            GRAF["📉 grafana<br/>dashboards + alerts"]
-            REXP["📡 redis-exporter<br/>Redis metrics"]
-        end
+    subgraph MON ["📊 monitoring · optional · external"]
+        PROM["📈 prometheus<br/>metrics · 14d retention"]
+        GRAF["📉 grafana<br/>dashboards + alerts"]
+        REXP["📡 redis-exporter<br/>Redis metrics"]
     end
 
     SOCK["🔌 /var/run/docker.sock<br/>read-only"]
@@ -181,9 +181,9 @@ graph TB
     LLM --> EGRESS
     DP --> SOCK
     EGRESS -->|egress-net| LLMAPI
-    PROM -.->|scrape :4000| LLM
-    PROM -.->|scrape :9121| REXP
-    REXP -.-> REDIS
+    PROM -.->|openclaw-net| LLM
+    PROM -.->|openclaw-net| REXP
+    REXP -.->|openclaw-net| REDIS
     GRAF -.-> PROM
 
     classDef external fill:#f9f0ff,stroke:#9b59b6,stroke-width:2px,color:#333
@@ -199,7 +199,7 @@ graph TB
     class SOCK infra
 ```
 
-Three bridge networks enforce least-privilege communication. `openclaw-net` is **internal** — no internet access. The egress proxy bridges internal and external via `egress-net`. The reverse proxy reaches the gateway and Grafana via `proxy-net`. When monitoring is enabled, Prometheus scrapes LiteLLM and the Redis exporter on the internal network; Grafana is exposed through the reverse proxy. Dashed lines indicate optional monitoring connections. Traffic never leaves the host between services, so no IPSEC encryption is needed.
+Three bridge networks enforce least-privilege communication. `openclaw-net` is **internal** — no internet access. The egress proxy bridges internal and external via `egress-net`. The reverse proxy reaches the gateway and Grafana via `proxy-net`. Monitoring services run outside the internal network and attach to `openclaw-net` only to scrape metrics; Grafana is exposed through the reverse proxy. Dashed lines indicate optional monitoring connections. Traffic never leaves the host between services, so no IPSEC encryption is needed.
 
 ## Table of Contents
 
