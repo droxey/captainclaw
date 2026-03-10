@@ -58,16 +58,10 @@
       register: filebrowser_pull
       until: filebrowser_pull is not failed
 
-    - name: Check if monitoring compose overlay exists
-      ansible.builtin.stat:
-        path: "{{ openclaw_base_dir }}/compose.monitoring.yml"
-      register: monitoring_compose_file
-
     - name: Build convenience compose file list
       ansible.builtin.set_fact:
         _convenience_compose_files: >-
           {{ ['docker-compose.yml', 'compose.convenience.yml'] +
-             (['compose.monitoring.yml'] if monitoring_compose_file.stat.exists else []) +
              (['compose.caddy.yml'] if reverse_proxy == 'caddy' else []) +
              (['compose.tunnel.yml'] if reverse_proxy == 'tunnel' else []) }}
 
