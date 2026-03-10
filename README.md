@@ -1567,7 +1567,6 @@ egress_extra_domains:
 
 If you enable optional Clawtomaton skills, add only the extra domains they require, such as `api.moltbunker.com`, `api.conway.tech`, or `api.conway.domains`. Keep the whitelist tight — every added domain is another possible data-exfiltration target.
 
-Restart to load the new environment:
 To add or rotate LLM provider API keys, edit `/opt/openclaw/.env` on the host and restart LiteLLM:
 
 ```bash
