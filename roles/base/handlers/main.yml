@@ -19,7 +19,6 @@
   ansible.builtin.systemd:
     name: fail2ban
     state: restarted
-    enabled: true
 
 - name: Reload ufw
   community.general.ufw:

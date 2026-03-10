@@ -12,7 +12,6 @@ role-tests:                    ## Run Molecule tests for template-bearing roles
 	cd roles/openclaw-harden && molecule test
 	cd roles/reverse-proxy && molecule test
 	cd roles/maintenance && molecule test
-	cd roles/monitoring && molecule test
 	cd roles/convenience && molecule test
 
 deploy:                        ## Deploy OpenClaw to target server

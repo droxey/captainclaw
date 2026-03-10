@@ -158,6 +158,11 @@
     update_cache: true
     cache_valid_time: 3600
 
+- name: Ensure fail2ban service is enabled
+  ansible.builtin.systemd:
+    name: fail2ban
+    enabled: true
+
 - name: Set UFW default deny incoming
   community.general.ufw:
     direction: incoming
