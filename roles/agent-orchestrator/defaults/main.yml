@@ -1,0 +1,31 @@
+---
+# Agent Orchestrator defaults
+# Override in group_vars/all/vars.yml or host_vars as needed.
+
+agent_orchestrator_enabled: true
+agent_orchestrator_repo: "https://github.com/ComposioHQ/agent-orchestrator.git"
+# Pin to commit SHA for reproducible deploys — git tags can be force-pushed.
+# SHA below is HEAD of main as of 2026-03-10. To update:
+#   git ls-remote https://github.com/ComposioHQ/agent-orchestrator refs/heads/main
+agent_orchestrator_version: "240d6423fb0e3efb4d423b0f118871c438eedf6c"
+
+agent_orchestrator_install_dir: "/opt/agent-orchestrator"
+agent_orchestrator_data_dir: "/opt/agent-orchestrator/data"
+agent_orchestrator_worktree_dir: "/opt/agent-orchestrator/worktrees"
+
+agent_orchestrator_port: 3000
+agent_orchestrator_terminal_port: 14800
+
+# Plugin slots — see https://github.com/ComposioHQ/agent-orchestrator
+agent_orchestrator_runtime: "docker"
+agent_orchestrator_agent: "claude-code"
+agent_orchestrator_workspace: "worktree"
+agent_orchestrator_tracker: "github"
+agent_orchestrator_notifier: "desktop"
+
+# Conservative default — leaves headroom for OpenClaw sandbox agents.
+agent_orchestrator_max_concurrent: 5
+agent_orchestrator_auto_merge: false
+
+# Node.js major version (installed via NodeSource APT repo).
+agent_orchestrator_node_version: "20"

@@ -1,0 +1,6 @@
+---
+- name: Restart agent-orchestrator
+  ansible.builtin.systemd:
+    name: agent-orchestrator
+    state: restarted
+    daemon_reload: true

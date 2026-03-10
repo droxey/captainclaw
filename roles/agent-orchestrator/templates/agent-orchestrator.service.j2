@@ -1,0 +1,34 @@
+# Agent Orchestrator systemd unit
+# Managed by Ansible — manual edits will be overwritten on next deploy.
+# Dashboard accessible at http://127.0.0.1:{{ agent_orchestrator_port }}
+
+[Unit]
+Description=Agent Orchestrator — multi-agent coordination dashboard
+Documentation=https://github.com/ComposioHQ/agent-orchestrator
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User={{ deploy_user }}
+Group={{ deploy_user }}
+WorkingDirectory={{ agent_orchestrator_install_dir }}/repo
+EnvironmentFile={{ agent_orchestrator_install_dir }}/.env
+ExecStart=/usr/bin/node {{ agent_orchestrator_install_dir }}/repo/packages/dashboard/dist/index.js
+Restart=on-failure
+RestartSec=10
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths={{ agent_orchestrator_data_dir }} {{ agent_orchestrator_worktree_dir }} {{ agent_orchestrator_install_dir }}
+PrivateTmp=true
+
+# Resource limits — prevent runaway memory on the shared host
+MemoryMax=2G
+CPUQuota=200%
+
+[Install]
+WantedBy=multi-user.target

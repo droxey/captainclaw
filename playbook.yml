@@ -11,7 +11,7 @@
 # Prerequisite: apt install sshpass (needed for Ansible to send SSH passwords).
 # After bootstrap pushes your SSH key, subsequent runs use key-based auth only.
 #
-# Tags: base, config, deploy, harden, agents, integrate, proxy, verify, maintenance
+# Tags: base, config, deploy, harden, agents, orchestrator, integrate, proxy, verify, maintenance
 
 # ── Bootstrap: ensure deploy user can SSH on ssh_port ────────────────────
 # Handles three server states:
@@ -306,6 +306,15 @@
             fail_msg: "telegram_bot_token must be set in vault.yml when telegram_enabled is true"
           when: telegram_enabled | bool
 
+        - name: Ensure GitHub token is set when agent orchestrator is enabled
+          ansible.builtin.assert:
+            that:
+              - github_token is defined
+              - github_token | length > 0
+              - github_token != 'ghp_your-token-here'
+            fail_msg: "github_token must be set in vault.yml when agent_orchestrator_enabled is true"
+          when: agent_orchestrator_enabled | default(false) | bool
+
     - name: Verify secrets are set in vault
       tags: [always]
       block:
@@ -354,6 +363,9 @@
       when: >
         (agency_agents_enabled | default(false) | bool) or
         (vendor_skills_enabled | default(false) | bool)
+    - role: agent-orchestrator
+      tags: [orchestrator]
+      when: agent_orchestrator_enabled | default(false) | bool
     - role: openclaw-integrate
       tags: [integrate]
     - role: convenience

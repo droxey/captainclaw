@@ -50,6 +50,8 @@ All setups assume hardened VPS/Tailscale stack, allowlist Telegram, soul.md memo
 
 ## Swarm & Memory Fortresses
 
+> **Implementation path**: [Agent Orchestrator](https://github.com/ComposioHQ/agent-orchestrator) (Step 5.2 in [README.md](README.md)) enables many of these patterns on a single OpenClaw host — parallel agents in isolated worktrees, auto-CI-fix, and a coordination dashboard. Deploy with `agent_orchestrator_enabled: true`.
+
 - Multi-department swarms: separate OpenClaw instances per team (BD/ops/product) with Telegram-only interface for non-tech staff — no terminals.
 - The Org: interlocking specialist agents (strategy/dev/marketing) you "hire" via natural language → give feedback → they improve inside one Telegram chat.
 - Ontology Knowledge Graph: typed entities (Person/Project/Task) with constraints → agents share state across skills like a living second brain.

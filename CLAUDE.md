@@ -42,6 +42,7 @@ clincher/
     ├── openclaw-deploy/         # Step 4: docker compose up, health wait
     ├── openclaw-harden/         # Step 5: gateway/sandbox hardening
     ├── agency-agents/           # Step 5.1: prompt library (optional)
+    ├── agent-orchestrator/      # Step 5.2: multi-agent orchestration (optional)
     ├── openclaw-integrate/      # Steps 6-8: API, Telegram, memory
     ├── reverse-proxy/           # Step 9: Caddy/Tunnel/Tailscale
     ├── verify/                  # Step 10: post-deploy verification
@@ -114,6 +115,8 @@ Three bridge networks enforce least-privilege. `openclaw-net` is `internal: true
 | `redis` | `redis/redis-stack-server:7.4.0-v3` | Semantic cache (RediSearch module) | `openclaw-net` |
 
 Monitoring services (Prometheus, Grafana, Uptime Kuma) run on a **separate VPS** — deploy via `ansible-playbook caprover-playbook.yml`.
+
+**Agent Orchestrator** ([ComposioHQ/agent-orchestrator](https://github.com/ComposioHQ/agent-orchestrator)) runs as a host-level systemd service (not inside Docker). It manages parallel AI agents via the Docker runtime plugin, spawning each agent in its own container/worktree. Dashboard on `127.0.0.1:3000` (localhost only). Optional — controlled by `agent_orchestrator_enabled`.
 
 ### Networks
 

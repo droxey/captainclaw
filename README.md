@@ -208,6 +208,7 @@ Three bridge networks enforce least-privilege communication. `openclaw-net` is *
   - [Step 3: Create Configuration Files](#step-3-create-configuration-files)
   - [Step 4: Deploy](#step-4-deploy)
   - [Step 5: Gateway and Sandbox Hardening](#step-5-gateway-and-sandbox-hardening)
+  - [Step 5.2: Agent Orchestration](#step-52-agent-orchestration-optional)
   - [Step 6: API Keys and Model Configuration](#step-6-api-keys-and-model-configuration)
   - [Step 7: Channel Integration](#step-7-channel-integration)
   - [Step 8: Memory and RAG Configuration](#step-8-memory-and-rag-configuration)
@@ -280,6 +281,7 @@ Keep those three values stable across re-runs so auth tokens and encrypted backu
 | `openclaw-deploy` | 4 | Build Smokescreen image, `docker compose up`, wait for healthy |
 | `openclaw-harden` | 5 | Gateway auth, sandbox isolation, resource caps, tool denials, SOUL.md |
 | `agency-agents` | 5.1 | Clone and deploy [agency-agents](https://github.com/msitarzewski/agency-agents) prompt library (optional, `agency_agents_enabled: true`) |
+| `agent-orchestrator` | 5.2 | Install and configure [agent-orchestrator](https://github.com/ComposioHQ/agent-orchestrator) for multi-agent coordination (`agent_orchestrator_enabled: true`) |
 | `openclaw-integrate` | 6-8 | LiteLLM as model proxy, Telegram channel, Voyage AI memory index |
 | `reverse-proxy` | 9 | Caddy (default), Cloudflare Tunnel, or Tailscale Serve |
 | `verify` | 10 | Security audit, container health, egress tests, config spot-checks |
@@ -321,6 +323,7 @@ tailscale_enabled: false               # true → replaces public SSH with Tails
 disable_ipv6: false                    # true → disables IPv6 system-wide
 telegram_enabled: true                 # false → skips Telegram channel setup
 agency_agents_enabled: true            # false → skips agency-agents prompt library
+agent_orchestrator_enabled: true       # false → skips agent-orchestrator install
 
 # ── Resource Tuning ───────────────────────────────────
 openclaw_memory: "16G"                 # Tuned for 64 GB Production tier
@@ -363,6 +366,7 @@ clincher/
     ├── openclaw-deploy/               # Build egress image, docker compose up, health wait
     ├── openclaw-harden/               # 30+ config set commands, SOUL.md, security audit
     ├── agency-agents/                 # Clone and deploy agency-agents prompt library
+    ├── agent-orchestrator/            # Multi-agent orchestration (ComposioHQ/agent-orchestrator)
     ├── openclaw-integrate/            # Model proxy, Telegram, memory index
     ├── convenience/                   # Shell aliases, shared uploads, Filebrowser (optional)
     ├── reverse-proxy/                 # Caddy / Tunnel / Tailscale (conditional)
@@ -1331,6 +1335,81 @@ Before enabling a new skill or third-party agent prompt, review each item below.
 | 7 | **Set tool denials** — add agent-level `tools.deny` for unused tools? | Defense-in-depth: even if the skill asks for a tool, the deny list blocks it. |
 
 > **Automated vetting**: For deployments using the agency-agents prompt library (61 personas), the Ansible role already pins to a commit SHA and deploys only reviewed `.md` files. Apply the same discipline to any skill you add manually.
+
+#### Step 5.2: Agent Orchestration (Optional)
+
+[Agent Orchestrator](https://github.com/ComposioHQ/agent-orchestrator) adds a coordination layer for managing multiple parallel AI agents. Each agent operates in an isolated git worktree with its own branch and PR. The orchestrator auto-recovers from CI failures, responds to code review comments, and provides a real-time dashboard for monitoring agent activity.
+
+**Why orchestrate?** Without orchestration, the 61 agent personas (Step 5.1) are a static prompt library — individual agents with no coordination. The orchestrator enables multi-agent workflows described in [USECASES.md](USECASES.md): "The Org" (interlocking specialist agents), overnight build swarms, and multi-department teams. On a 16 vCPU / 64 GB host, it manages up to 5 concurrent agents (configurable) alongside the existing OpenClaw sandbox.
+
+**Enable orchestration** — set in `group_vars/all/vars.yml`:
+
+```yaml
+agent_orchestrator_enabled: true    # Installs Node.js 20, pnpm, GitHub CLI, builds from source
+agent_orchestrator_max_concurrent: 5 # Conservative — leaves headroom for sandbox agents
+agent_orchestrator_runtime: "docker" # Agents spawn inside containers on openclaw-net
+```
+
+**GitHub token** — add to `vault.yml` (required when enabled):
+
+```yaml
+# Create a fine-grained PAT at https://github.com/settings/tokens
+# Permissions: repo, issues, pull-requests for target repositories
+github_token: "ghp_xxxx"
+```
+
+**Deploy** with Ansible:
+
+```bash
+# Orchestrator only
+ansible-playbook playbook.yml --ask-vault-pass --tags orchestrator
+
+# Or as part of full deployment
+ansible-playbook playbook.yml --ask-vault-pass
+```
+
+**Post-deploy setup** — configure projects via the `ao` CLI on the server:
+
+```bash
+# Interactive setup (auto-detects project structure)
+ao init --auto
+
+# Or spawn an agent on a specific GitHub issue
+ao spawn my-project 123
+
+# List active agent sessions
+ao session ls
+
+# Send instructions to a running agent
+ao send "refactor the auth module to use JWT"
+```
+
+**Dashboard access** — bound to `127.0.0.1:3000` (UFW blocks external access). Connect via SSH tunnel:
+
+```bash
+ssh -L 3000:localhost:3000 deploy@<SERVER_IP> -p <SSH_PORT>
+# Then open http://localhost:3000 in your browser
+```
+
+**How it works:**
+
+| Component | Description |
+|-----------|-------------|
+| **Runtime** | `docker` — agents spawn inside containers, inheriting the security model |
+| **Workspace** | `worktree` — each agent gets an isolated git worktree (no shared state) |
+| **Tracker** | `github` — reads issues, creates PRs, monitors CI status |
+| **Reactions** | Auto-responds to CI failures (re-reads logs, fixes code) and review comments |
+| **Dashboard** | Next.js app with Server-Sent Events — real-time session monitoring |
+
+**Security notes:**
+
+- Dashboard runs on localhost only — never exposed directly to the internet
+- GitHub token stored as a file-based secret in `/opt/agent-orchestrator/.env` (never CLI args)
+- Systemd unit runs as the `deploy` user with `NoNewPrivileges`, `ProtectSystem=strict`
+- Resource capped at 2 GB RAM / 200% CPU to prevent host contention
+- `max_concurrent: 5` leaves 3 slots for OpenClaw sandbox agents (total 8 concurrent)
+
+> **Scaling note**: To increase orchestrator concurrency beyond 5, also increase `sandbox_max_concurrent` in vars.yml and ensure total memory allocation (orchestrator + sandbox agents) fits within the host's 64 GB.
 
 ### Step 6: API Keys and Model Configuration
 

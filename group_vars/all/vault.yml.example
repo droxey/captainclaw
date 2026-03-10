@@ -16,6 +16,12 @@ litellm_master_key: ""
 gateway_token: ""
 backup_encryption_key: ""
 
+# ── Agent Orchestrator ─────────────────────────────────────────────
+# Required when agent_orchestrator_enabled: true
+# Create a fine-grained PAT at https://github.com/settings/tokens with
+# repo, issues, and pull-request permissions for target repositories.
+github_token: "ghp_your-token-here"
+
 # ── Channel Tokens ──────────────────────────────────────────────────
 telegram_bot_token: "YOUR_TELEGRAM_BOT_TOKEN"
 

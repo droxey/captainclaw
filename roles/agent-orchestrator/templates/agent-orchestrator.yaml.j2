@@ -1,0 +1,40 @@
+# Agent Orchestrator configuration
+# Managed by Ansible — manual edits will be overwritten on next deploy.
+# Add projects post-deploy: ao init --auto  OR  edit this file and restart.
+# Docs: https://github.com/ComposioHQ/agent-orchestrator
+
+dataDir: {{ agent_orchestrator_data_dir }}
+worktreeDir: {{ agent_orchestrator_worktree_dir }}
+port: {{ agent_orchestrator_port }}
+terminalPort: {{ agent_orchestrator_terminal_port }}
+
+defaults:
+  runtime: {{ agent_orchestrator_runtime }}
+  agent: {{ agent_orchestrator_agent }}
+  workspace: {{ agent_orchestrator_workspace }}
+  tracker: {{ agent_orchestrator_tracker }}
+  notifier: {{ agent_orchestrator_notifier }}
+
+projects: []
+# Projects are configured post-deploy via `ao init` or by editing this file
+# and restarting: systemctl restart agent-orchestrator
+#
+# Example project:
+#   - name: my-project
+#     repo: owner/repo-name
+#     path: {{ agent_orchestrator_worktree_dir }}/my-project
+#     defaultBranch: main
+#     sessionPrefix: ao-
+#     rules:
+#       maxConcurrent: {{ agent_orchestrator_max_concurrent }}
+#       autoMergeApprovedPRs: {{ agent_orchestrator_auto_merge | lower }}
+#     reactions:
+#       - trigger: ci-failed
+#         action: send-to-agent
+#         enabled: true
+#       - trigger: changes-requested
+#         action: send-to-agent
+#         enabled: true
+#       - trigger: approved
+#         action: notify
+#         enabled: false

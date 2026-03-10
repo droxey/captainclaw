@@ -1,0 +1,210 @@
+---
+# Agent Orchestrator: Install, configure, and run ComposioHQ/agent-orchestrator
+# Source: https://github.com/ComposioHQ/agent-orchestrator
+# Manages parallel AI coding agents with isolated git worktrees and a dashboard.
+# Runs as a systemd service on the host — dashboard bound to localhost only.
+
+# ── Prerequisites: Node.js 20 + pnpm + GitHub CLI ──────────────────────────
+
+- name: Check if Node.js is already installed
+  ansible.builtin.command: node --version
+  register: node_check
+  changed_when: false
+  failed_when: false
+
+- name: Install NodeSource APT repository for Node.js {{ agent_orchestrator_node_version }}
+  ansible.builtin.shell: |
+    set -euo pipefail
+    curl -fsSL https://deb.nodesource.com/setup_{{ agent_orchestrator_node_version }}.x | bash -
+  args:
+    executable: /bin/bash
+    creates: /etc/apt/sources.list.d/nodesource.list
+  when: node_check.rc != 0 or (node_check.stdout is defined and node_check.stdout is not search('v' + agent_orchestrator_node_version | string))
+
+- name: Install Node.js
+  ansible.builtin.apt:
+    name: nodejs
+    state: present
+    update_cache: true
+
+- name: Enable corepack (ships with Node.js — provides pnpm)
+  ansible.builtin.command: corepack enable
+  changed_when: false
+
+- name: Prepare pnpm via corepack
+  ansible.builtin.command: corepack prepare pnpm@latest --activate
+  changed_when: false
+
+- name: Check if GitHub CLI is already installed
+  ansible.builtin.command: gh --version
+  register: gh_check
+  changed_when: false
+  failed_when: false
+
+- name: Install GitHub CLI APT repository
+  when: gh_check.rc != 0
+  block:
+    - name: Add GitHub CLI GPG key
+      ansible.builtin.shell: |
+        set -euo pipefail
+        curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+          | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+        chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
+      args:
+        executable: /bin/bash
+        creates: /usr/share/keyrings/githubcli-archive-keyring.gpg
+
+    - name: Add GitHub CLI APT source
+      ansible.builtin.copy:
+        content: >
+          deb [arch=amd64 signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg]
+          https://cli.github.com/packages stable main
+        dest: /etc/apt/sources.list.d/github-cli.list
+        owner: root
+        group: root
+        mode: "0644"
+
+- name: Install GitHub CLI
+  ansible.builtin.apt:
+    name: gh
+    state: present
+    update_cache: true
+
+# ── Clone and Build ─────────────────────────────────────────────────────────
+
+- name: Create agent-orchestrator directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "0755"
+  loop:
+    - "{{ agent_orchestrator_install_dir }}"
+    - "{{ agent_orchestrator_data_dir }}"
+    - "{{ agent_orchestrator_worktree_dir }}"
+
+- name: Clone agent-orchestrator repository
+  ansible.builtin.git:
+    repo: "{{ agent_orchestrator_repo }}"
+    dest: "{{ agent_orchestrator_install_dir }}/repo"
+    version: "{{ agent_orchestrator_version }}"
+    depth: 1
+    force: true
+  register: ao_clone
+  retries: 3
+  delay: 10
+  until: ao_clone is not failed
+  become: true
+  become_user: "{{ deploy_user }}"
+
+- name: Install dependencies and build
+  ansible.builtin.command: pnpm install
+  args:
+    chdir: "{{ agent_orchestrator_install_dir }}/repo"
+  become: true
+  become_user: "{{ deploy_user }}"
+  when: ao_clone.changed
+  register: ao_install
+  changed_when: ao_install.rc == 0
+
+- name: Build agent-orchestrator
+  ansible.builtin.command: pnpm build
+  args:
+    chdir: "{{ agent_orchestrator_install_dir }}/repo"
+  become: true
+  become_user: "{{ deploy_user }}"
+  when: ao_clone.changed
+  register: ao_build
+  changed_when: ao_build.rc == 0
+
+- name: Link ao CLI globally
+  ansible.builtin.command: pnpm link --global
+  args:
+    chdir: "{{ agent_orchestrator_install_dir }}/repo"
+  become: true
+  become_user: "{{ deploy_user }}"
+  when: ao_clone.changed
+  changed_when: ao_clone.changed
+
+# ── Configuration ───────────────────────────────────────────────────────────
+
+- name: Render agent-orchestrator.yaml configuration
+  ansible.builtin.template:
+    src: agent-orchestrator.yaml.j2
+    dest: "{{ agent_orchestrator_install_dir }}/agent-orchestrator.yaml"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "0640"
+  notify: Restart agent-orchestrator
+
+- name: Create GitHub token environment file
+  ansible.builtin.copy:
+    content: |
+      GITHUB_TOKEN={{ github_token }}
+    dest: "{{ agent_orchestrator_install_dir }}/.env"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "0600"
+  no_log: true
+  notify: Restart agent-orchestrator
+
+# ── Systemd Service ─────────────────────────────────────────────────────────
+
+- name: Install agent-orchestrator systemd unit
+  ansible.builtin.template:
+    src: agent-orchestrator.service.j2
+    dest: /etc/systemd/system/agent-orchestrator.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart agent-orchestrator
+
+- name: Enable and start agent-orchestrator service
+  ansible.builtin.systemd:
+    name: agent-orchestrator
+    enabled: true
+    state: started
+    daemon_reload: true
+
+# ── Firewall: Dashboard on Localhost Only ───────────────────────────────────
+
+- name: Block external access to orchestrator dashboard port
+  community.general.ufw:
+    rule: deny
+    port: "{{ agent_orchestrator_port | string }}"
+    proto: tcp
+    direction: in
+    comment: "agent-orchestrator dashboard — localhost only"
+
+- name: Allow localhost access to orchestrator dashboard
+  community.general.ufw:
+    rule: allow
+    port: "{{ agent_orchestrator_port | string }}"
+    proto: tcp
+    from_ip: 127.0.0.1
+    direction: in
+    comment: "agent-orchestrator dashboard — localhost"
+
+# ── Verification ────────────────────────────────────────────────────────────
+
+- name: Verify ao CLI is available
+  ansible.builtin.command: ao version
+  become: true
+  become_user: "{{ deploy_user }}"
+  register: ao_version
+  changed_when: false
+
+- name: Show agent-orchestrator version
+  ansible.builtin.debug:
+    msg: "Agent Orchestrator installed: {{ ao_version.stdout }}"
+
+- name: Wait for dashboard to respond
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ agent_orchestrator_port }}"
+    method: GET
+    status_code: [200, 302]
+  register: dashboard_check
+  retries: 6
+  delay: 5
+  until: dashboard_check is succeeded

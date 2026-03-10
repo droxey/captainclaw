@@ -204,6 +204,23 @@ vendor_skills:
     version: "643fb7a9514e1f8e4d6ea94de81793638f6dc2df"
     subdir: "skills"
 
+# ── Agent Orchestrator (Multi-Agent Coordination) ──────────────────────
+# Manages parallel AI agents with isolated worktrees, auto-CI-fix, and dashboard.
+# Source: https://github.com/ComposioHQ/agent-orchestrator
+# Dashboard accessible only via SSH tunnel or reverse proxy (never direct internet).
+agent_orchestrator_enabled: true
+agent_orchestrator_repo: "https://github.com/ComposioHQ/agent-orchestrator.git"
+# Pin to commit SHA for reproducible deploys — git tags can be force-pushed.
+# SHA below is HEAD of main as of 2026-03-10. To update:
+#   git ls-remote https://github.com/ComposioHQ/agent-orchestrator refs/heads/main
+agent_orchestrator_version: "240d6423fb0e3efb4d423b0f118871c438eedf6c"
+agent_orchestrator_port: 3000
+agent_orchestrator_runtime: "docker"
+agent_orchestrator_agent: "claude-code"
+agent_orchestrator_max_concurrent: 5
+agent_orchestrator_auto_merge: false
+# github_token lives in vault.yml
+
 # ── Channel ──────────────────────────────────────────────────────────
 telegram_enabled: true
 # telegram_bot_token lives in vault.yml
