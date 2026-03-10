@@ -5,6 +5,7 @@ ignore:
   - venv/
   - .claude/prompts/references/
   - .claude/prompts/assets/
+  - group_vars/all/vault.yml
 
 rules:
   line-length:
