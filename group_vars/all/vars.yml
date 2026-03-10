@@ -251,6 +251,9 @@ filebrowser_cpus: "0.5"
 filebrowser_memory: "64M"
 # Shared directory between host and OpenClaw container
 uploads_dir: "{{ openclaw_base_dir }}/uploads"
+# Same-server monitoring (Grafana reverse proxy path in Caddy).
+# Always false — monitoring runs on a separate VPS via caprover-playbook.yml.
+monitoring_enabled: false
 
 # ── Tailscale (Optional) ────────────────────────────────────────────
 tailscale_enabled: false
