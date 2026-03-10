@@ -21,7 +21,7 @@
     redis_version: "7.4.0-v3"
 
     # Secrets (test values)
-    litellm_master_key: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    litellm_master_key: "test-fixture-litellm-key-000000000000000000000000000000000000000"
     anthropic_api_key: "sk-ant-test-key-for-molecule"
     voyage_api_key: "pa-test-key-for-molecule"
     monitoring_enabled: false
