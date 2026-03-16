@@ -8,7 +8,10 @@
       "Bash(python3:*)",
       "Bash(pip3 list:*)",
       "Bash(pip3 list:*)",
-      "Bash(git status:*)"
+      "Bash(git status:*)",
+      "Read(//Users/droxey/.claude/skills/gstack/**)",
+      "Bash(./setup)",
+      "Bash(cp -Rf ~/.claude/skills/gstack /Users/droxey/dev/repos/clincher/.claude/skills/gstack && rm -rf /Users/droxey/dev/repos/clincher/.claude/skills/gstack/.git)"
     ]
   },
   "outputStyle": "Explanatory"
