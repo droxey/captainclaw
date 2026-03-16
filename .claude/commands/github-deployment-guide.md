@@ -50,7 +50,7 @@ main          ← protected, requires PR + passing CI + 1 review
 - Restrict who can push to matching branches
 - Do not allow bypassing the above settings (including admins)
 
-**Tag convention:** CalVer `v2026.3.7` matching OpenClaw's tagging scheme; release candidates use `v2026.3.7-rc.1`.
+**Tag convention:** CalVer `v2026.3.13` matching OpenClaw's tagging scheme; release candidates use `v2026.3.13-rc.1`.
 
 ---
 
@@ -175,7 +175,7 @@ feature/* ──► PR to main ──► CI passes ──► merge to main
                                                 │
                                           auto-deploy to staging
                                                 │
-                                     manual tag: git tag v2026.3.7
+                                     manual tag: git tag v2026.3.13
                                                 │
                                           deploy.yml triggers
                                                 │

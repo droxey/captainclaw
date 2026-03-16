@@ -25,7 +25,7 @@ Rule: >3 files read or output the user doesn't need verbatim → delegate, retur
 
 - **Artifact**: Production-grade, security-hardened OpenClaw deployment on Ubuntu 24.04 + Docker Compose
 - **Target**: 1 KVM VPS (16 vCPU, 64 GB RAM, 8 GB swap, 4 TB NVMe)
-- **OpenClaw Version**: `ghcr.io/openclaw/openclaw:2026.3.7` (pinned)
+- **OpenClaw Version**: `ghcr.io/openclaw/openclaw:2026.3.13` (pinned)
 - **Threat model**: Prompt injection → arbitrary tool execution → host/container escape
 
 ## Repository Structure
@@ -119,7 +119,7 @@ Three bridge networks enforce least-privilege. `openclaw-net` is `internal: true
 | Service | Image | Purpose | Network |
 |---------|-------|---------|---------|
 | `docker-proxy` | `ghcr.io/tecnativa/docker-socket-proxy:v0.4.2` | Sandboxed Docker API (EXEC only) | `openclaw-net` |
-| `openclaw` | `ghcr.io/openclaw/openclaw:2026.3.7` | Main gateway — agent runtime, tool execution | `openclaw-net` + `proxy-net` |
+| `openclaw` | `ghcr.io/openclaw/openclaw:2026.3.13` | Main gateway — agent runtime, tool execution | `openclaw-net` + `proxy-net` |
 | `litellm` | `ghcr.io/berriai/litellm:main-v1.81.3-stable` | LLM API proxy — routing, cost controls, caching | `openclaw-net` |
 | `openclaw-egress` | Built from [stripe/smokescreen](https://github.com/stripe/smokescreen) | Egress whitelist proxy for LLM API calls | `openclaw-net` + `egress-net` |
 | `redis` | `redis/redis-stack-server:7.4.0-v3` | Semantic cache (RediSearch module) | `openclaw-net` |

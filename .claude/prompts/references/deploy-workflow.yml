@@ -1,7 +1,7 @@
 # .github/workflows/deploy.yml
 # Deploys playbook to staging (auto) then production (manual approval).
 # Uses OIDC — no long-lived SSH keys or cloud credentials in secrets.
-# Triggered by a version tag push (e.g. v2026.3.7).
+# Triggered by a version tag push (e.g. v2026.3.13).
 
 name: Deploy
 

@@ -93,10 +93,12 @@
     # Propagate the resolved port so the main play connects on the right port.
     # Without this, the main play uses ansible_port from inventory (ssh_port),
     # but on a fresh server SSH is still on 22 until the base role moves it.
-    - name: Propagate resolved SSH port to main play
+    - name: Propagate resolved SSH port and user to main play
       ansible.builtin.add_host:
         name: openclaw
         ansible_port: "{{ ansible_port }}"
+        ansible_user: "{{ deploy_user }}"
+        ansible_ssh_private_key_file: "{{ local_ssh_key_path }}"
       changed_when: false
 
     # ── Phase 3: Provision deploy user via root ─────────────────────────
