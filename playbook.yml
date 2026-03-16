@@ -40,17 +40,20 @@
         ssh -o BatchMode=yes -o ConnectTimeout=5
         -o StrictHostKeyChecking=accept-new
         -o IdentitiesOnly=yes
-        {{ '-i ' + local_ssh_key_path if local_key_stat.stat.exists else '' }}
+        -i {{ local_ssh_key_path }}
         -p {{ ssh_port }} {{ deploy_user }}@{{ ansible_host }} echo ok
       delegate_to: localhost
       become: false
       ignore_errors: true
       register: deploy_ssh_check
       changed_when: false
+      when: local_key_stat.stat.exists
 
     - name: Skip bootstrap when deploy user is accessible
       ansible.builtin.meta: end_play
-      when: deploy_ssh_check.rc == 0
+      when:
+        - deploy_ssh_check is not skipped
+        - deploy_ssh_check.rc == 0
 
     # ── Phase 2: Find a port where root can connect ─────────────────────
     - name: Check configured SSH port ({{ ssh_port }})
