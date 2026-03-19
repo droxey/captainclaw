@@ -17,6 +17,8 @@ VAULT_PASS_FILE="${INSTALL_DIR}/.vault-pass"
 LOG_FILE="/var/log/clincher-bootstrap.log"
 REQUIRED_ID="ubuntu"
 REQUIRED_VERSION="24.04"
+# Keep in sync with requirements.txt
+ANSIBLE_VERSION="13.4.0"
 
 # ── Colors (with no-color fallback) ────────────────────────────────────────
 if [[ -t 1 ]] && command -v tput &>/dev/null; then
@@ -160,14 +162,14 @@ install_deps() {
     pipx git curl openssl sshpass \
     > /dev/null 2>&1
 
-  # Ansible via pipx
+  # Ansible via pipx — install the version pinned in ANSIBLE_VERSION (keep in sync with requirements.txt)
   if command -v ansible &>/dev/null; then
     info "Ansible already installed: $(ansible --version | head -1)"
   else
-    info "Installing Ansible via pipx..."
+    info "Installing ansible==${ANSIBLE_VERSION} via pipx..."
     if ! PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin \
-      pipx install --include-deps ansible >>"$LOG_FILE" 2>&1; then
-      warn "pipx install failed — falling back to apt..."
+      pipx install --include-deps "ansible==${ANSIBLE_VERSION}" >>"$LOG_FILE" 2>&1; then
+      warn "pipx install failed — falling back to apt (version may differ from pinned ansible==${ANSIBLE_VERSION})..."
       apt-get install -y -qq ansible > /dev/null 2>&1
     fi
   fi
