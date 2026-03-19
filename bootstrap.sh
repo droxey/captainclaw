@@ -334,6 +334,25 @@ generate_config() {
     if [[ "${overwrite,,}" != "y" ]]; then
       info "Keeping existing vault.yml. Skipping secret generation."
       SKIP_VAULT=true
+
+      # Ensure we have a vault password file to decrypt the existing vault
+      if [[ ! -f "$VAULT_PASS_FILE" ]]; then
+        info "Existing vault.yml detected but no vault password file found."
+        while true; do
+          read -s -p "Enter existing Ansible vault password for this host: " vault_pass_1
+          echo
+          read -s -p "Confirm vault password: " vault_pass_2
+          echo
+          if [[ -n "$vault_pass_1" && "$vault_pass_1" == "$vault_pass_2" ]]; then
+            printf '%s\n' "$vault_pass_1" > "$VAULT_PASS_FILE"
+            chmod 0600 "$VAULT_PASS_FILE"
+            unset vault_pass_1 vault_pass_2
+            break
+          else
+            warn "Passwords did not match or were empty. Please try again."
+          fi
+        done
+      fi
     else
       SKIP_VAULT=false
     fi
