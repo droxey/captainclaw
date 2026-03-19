@@ -2101,6 +2101,16 @@ docker compose restart openclaw
 >
 > **What to monitor**: Tool execution duration (P95 > 30s indicates sandbox issues), LLM API latency (P95 > 10s suggests provider throttling), and error rates by tool name (spikes indicate misconfiguration or denied tools).
 
+#### Agent-Level Observability: ClawMetry
+
+For OpenClaw-specific observability — token costs per session, sub-agent trees, cron history, memory-file diffs, and tool-call traces — install [ClawMetry](https://clawmetry.com/#get-started):
+
+```bash
+pip install clawmetry && clawmetry
+```
+
+ClawMetry auto-detects your OpenClaw installation and requires no configuration. It complements the OTLP pipeline above by surfacing OpenClaw-native concepts (channels, sub-agents, SOUL.md changes) that generic tracing tools don't model.
+
 ### Step 11: Maintenance
 
 #### Backup Script (`/opt/openclaw/monitoring/backup.sh`)

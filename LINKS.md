@@ -12,3 +12,7 @@
 - [Community Use Cases](https://raw.githubusercontent.com/droxey/clincher/refs/heads/main/USECASES.md)
 - [Moltbook Use Cases](https://raw.githubusercontent.com/EvoLinkAI/awesome-openclaw-usecases-moltbook/refs/heads/main/README.md)
 - [Use OpenClaw to Make Money](https://raw.githubusercontent.com/BlockRunAI/awesome-OpenClaw-Money-Maker/refs/heads/main/README.md)
+
+## Monitoring
+
+- [ClawMetry — Real-Time Agent Observability](https://clawmetry.com/#get-started)
