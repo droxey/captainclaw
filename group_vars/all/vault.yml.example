@@ -27,6 +27,9 @@ voyage_api_key: "pa-your-key-here"
 litellm_master_key: ""
 gateway_token: ""
 backup_encryption_key: ""
+# Optional — enables Redis AUTH for defense-in-depth on openclaw-net.
+# Generate with: openssl rand -hex 32
+# redis_password: ""
 
 # ── Agent Orchestrator ─────────────────────────────────────────────
 # Required when agent_orchestrator_enabled: true

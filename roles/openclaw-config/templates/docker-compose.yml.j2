@@ -112,6 +112,9 @@ services:
 {% endif %}
       REDIS_HOST: "openclaw-redis"
       REDIS_PORT: "6379"
+{% if redis_password | default('') | length > 0 %}
+      REDIS_PASSWORD: "${REDIS_PASSWORD}"
+{% endif %}
       HTTP_PROXY: http://openclaw-egress:4750
       HTTPS_PROXY: http://openclaw-egress:4750
       NO_PROXY: openclaw-redis,localhost,127.0.0.1
@@ -197,10 +200,20 @@ services:
       --maxmemory-policy allkeys-lru
       --save 300 10
       --appendonly no
+{% if redis_password | default('') | length > 0 %}
+      --requirepass ${REDIS_PASSWORD}
+      --protected-mode yes
+{% else %}
       --protected-mode no
+{% endif %}
       --loadmodule /opt/redis-stack/lib/redisearch.so
+{% if redis_password | default('') | length > 0 %}
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "--no-auth-warning", "ping"]
+{% else %}
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
+{% endif %}
       interval: 30s
       timeout: 5s
       retries: 3

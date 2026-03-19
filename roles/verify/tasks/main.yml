@@ -42,7 +42,10 @@
   failed_when: false
 
 - name: Verify Redis connectivity
-  ansible.builtin.command: docker exec openclaw-redis redis-cli ping
+  ansible.builtin.command: >
+    docker exec openclaw-redis redis-cli
+    {{ '-a ' ~ redis_password ~ ' --no-auth-warning' if redis_password | default('') | length > 0 else '' }}
+    ping
   register: redis_ping
   changed_when: false
   check_mode: false
