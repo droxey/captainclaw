@@ -200,7 +200,7 @@ clone_repo() {
   fi
 
   info "Installing Ansible Galaxy collections..."
-  ansible-galaxy collection install -r requirements.yml --force -p ./collections 2>&1 | tail -3
+  ansible-galaxy collection install -r requirements.yml --force 2>&1 | tail -3
   info "Repository ready at $INSTALL_DIR"
 }
 
