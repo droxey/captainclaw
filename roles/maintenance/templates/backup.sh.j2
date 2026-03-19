@@ -24,6 +24,11 @@ mkdir -p "{{ openclaw_base_dir }}/monitoring/logs" "{{ openclaw_base_dir }}/moni
     -C {{ openclaw_base_dir }} $CONFIG_FILES 2>> "$LOG"
 
   # Encrypt backups at rest
+  # SECURITY NOTE: The encryption key lives on the same server as the backups.
+  # If the host is compromised, both are accessible. For higher security:
+  #   - Copy encrypted backups to an off-site location (S3, rsync to another server)
+  #   - Store the encryption key in a separate KMS or off-server vault
+  #   - Never store both the key and backups in the same backup archive
   ENCRYPTION_KEY_FILE="{{ openclaw_base_dir }}/monitoring/.backup-encryption-key"
   if [ -f "$ENCRYPTION_KEY_FILE" ]; then
     for backup in {{ openclaw_base_dir }}/monitoring/backups/*-"$(date +%F)".tar.gz; do
