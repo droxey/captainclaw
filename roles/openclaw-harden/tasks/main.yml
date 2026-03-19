@@ -39,6 +39,33 @@
   check_mode: false
 
 # ── Gateway Token ─────────────────────────────────────────────────────
+# Detect if the gateway token was rotated by cron (rotate-token.sh) since
+# the last playbook run. If so, the on-disk token differs from vault.yml.
+# Overwriting it would revert the rotation, breaking existing API clients.
+- name: Check for externally rotated gateway token
+  ansible.builtin.slurp:
+    src: "{{ openclaw_base_dir }}/monitoring/.gateway-token"
+  register: _existing_gateway_token
+  failed_when: false
+  no_log: true
+
+- name: Detect gateway token drift
+  ansible.builtin.set_fact:
+    _gateway_token_drifted: >-
+      {{ _existing_gateway_token is succeeded
+         and (_existing_gateway_token.content | b64decode | trim) != gateway_token }}
+  no_log: true
+
+- name: Warn about gateway token drift (rotated by cron)
+  ansible.builtin.debug:
+    msg: >
+      WARNING: The on-disk gateway token differs from vault.yml — it was likely
+      rotated by cron (rotate-token.sh). Skipping overwrite to preserve the
+      rotated token. To force vault.yml's value, re-run with:
+        --extra-vars "force_gateway_token=true"
+      Then update vault.yml to match: ansible-vault edit group_vars/all/vault.yml
+  when: _gateway_token_drifted | bool and not (force_gateway_token | default(false) | bool)
+
 - name: Write gateway token to host file
   ansible.builtin.copy:
     content: "{{ gateway_token }}"
@@ -47,10 +74,12 @@
     group: root
     mode: "0600"
   no_log: true
+  when: not (_gateway_token_drifted | default(false) | bool) or (force_gateway_token | default(false) | bool)
 
 # block/always guarantees the token file is removed from the container even
 # if any auth config command fails — matching the same pattern used for SOUL.md.
 - name: Apply gateway auth config with guaranteed token cleanup
+  when: not (_gateway_token_drifted | default(false) | bool) or (force_gateway_token | default(false) | bool)
   block:
     - name: Copy gateway token into container
       ansible.builtin.command: >
