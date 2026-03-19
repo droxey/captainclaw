@@ -85,7 +85,9 @@
   block:
     - name: Enable Tailscale Serve for OpenClaw gateway
       ansible.builtin.command: tailscale serve --bg https+insecure://localhost:18789
-      changed_when: false
+      register: _tailscale_serve
+      changed_when: "'already serving' not in (_tailscale_serve.stderr | default(''))"
+      check_mode: false
 
     - name: Configure gateway for Tailscale serve mode
       ansible.builtin.command: >
