@@ -35,7 +35,10 @@
 
     - name: Add NodeSource APT source
       ansible.builtin.apt_repository:
-        repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_{{ agent_orchestrator_node_version }}.x nodistro main"
+        repo: >-
+          deb [arch={{ ansible_architecture | replace('x86_64', 'amd64') | replace('aarch64', 'arm64') }}
+          signed-by=/etc/apt/keyrings/nodesource.gpg]
+          https://deb.nodesource.com/node_{{ agent_orchestrator_node_version }}.x nodistro main
         filename: nodesource
         state: present
 
@@ -63,19 +66,21 @@
   when: gh_check.rc != 0
   block:
     - name: Add GitHub CLI GPG key
-      ansible.builtin.shell: |
-        set -euo pipefail
-        curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-          | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-        chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
-      args:
-        executable: /bin/bash
-        creates: /usr/share/keyrings/githubcli-archive-keyring.gpg
+      ansible.builtin.get_url:
+        url: https://cli.github.com/packages/githubcli-archive-keyring.gpg
+        dest: /usr/share/keyrings/githubcli-archive-keyring.gpg
+        mode: "0644"
+        force: false
+      retries: 3
+      delay: 5
+      register: gh_gpg_download
+      until: gh_gpg_download is not failed
 
     - name: Add GitHub CLI APT source
       ansible.builtin.copy:
         content: >
-          deb [arch=amd64 signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg]
+          deb [arch={{ ansible_architecture | replace('x86_64', 'amd64') | replace('aarch64', 'arm64') }}
+          signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg]
           https://cli.github.com/packages stable main
         dest: /etc/apt/sources.list.d/github-cli.list
         owner: root
