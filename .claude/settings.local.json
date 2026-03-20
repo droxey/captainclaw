@@ -15,7 +15,8 @@
       "WebSearch",
       "Bash(pip install:*)",
       "Bash(yamllint --version)",
-      "Bash(ansible-lint --version)"
+      "Bash(ansible-lint --version)",
+      "Bash(make check:*)"
     ]
   },
   "outputStyle": "Explanatory"

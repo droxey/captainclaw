@@ -1,4 +1,4 @@
-.PHONY: lint test role-tests deploy verify check caprover-check caprover-deploy caprover-verify scan help
+.PHONY: lint test role-tests deploy verify check caprover-check caprover-deploy caprover-verify scan bootstrap help
 
 lint:                          ## Run all linters (yamllint + ansible-lint + syntax check)
 	yamllint . && ansible-lint && ansible-playbook playbook.yml --syntax-check && ansible-playbook caprover-playbook.yml --syntax-check
@@ -37,6 +37,9 @@ scan:                          ## Scan for secret leaks (requires gitleaks)
 	fi
 
 check: lint test scan          ## Run lint + test + scan (full CI equivalent)
+
+bootstrap:                     ## Run bootstrap script (pass ARGS="--config deploy.yml" for flags)
+	bash bootstrap.sh $(ARGS)
 
 help:                          ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
