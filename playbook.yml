@@ -363,10 +363,6 @@
       tags: [deploy]
     - role: openclaw-harden
       tags: [harden]
-    - role: openclaw-integrate
-      tags: [integrate]
-    - role: reverse-proxy
-      tags: [proxy]
     - role: agency-agents
       tags: [agents]
       when: >
@@ -375,6 +371,10 @@
     - role: agent-orchestrator
       tags: [orchestrator]
       when: agent_orchestrator_enabled | default(false) | bool
+    - role: openclaw-integrate
+      tags: [integrate]
+    - role: reverse-proxy
+      tags: [proxy]
     - role: convenience
       tags: [convenience]
     - role: verify

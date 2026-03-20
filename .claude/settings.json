@@ -8,6 +8,11 @@
             "type": "command",
             "command": "rudel hooks claude session-end",
             "async": true
+          },
+          {
+            "type": "command",
+            "command": "yamllint --strict $(git diff --name-only --diff-filter=M -- '*.yml' '*.yaml') 2>/dev/null || true",
+            "async": true
           }
         ]
       }

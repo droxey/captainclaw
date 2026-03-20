@@ -12,7 +12,10 @@
       "Read(//Users/droxey/.claude/skills/gstack/**)",
       "Bash(./setup)",
       "Bash(cp -Rf ~/.claude/skills/gstack /Users/droxey/dev/repos/clincher/.claude/skills/gstack && rm -rf /Users/droxey/dev/repos/clincher/.claude/skills/gstack/.git)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(pip install:*)",
+      "Bash(yamllint --version)",
+      "Bash(ansible-lint --version)"
     ]
   },
   "outputStyle": "Explanatory"

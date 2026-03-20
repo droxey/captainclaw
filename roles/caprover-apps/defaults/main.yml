@@ -1,8 +1,40 @@
 ---
 # caprover-apps defaults
+# Enable flags
 caprover_prometheus_enabled: true
 caprover_grafana_enabled: true
 caprover_uptimekuma_enabled: true
 caprover_codeserver_enabled: true
 caprover_infisical_enabled: true
 caprover_redis_exporter_enabled: true
+
+# Auth — must be overridden in vault.yml
+caprover_captain_password: ""
+caprover_grafana_admin_password: ""
+caprover_codeserver_password: ""
+caprover_infisical_encryption_key: ""
+caprover_infisical_auth_secret: ""
+caprover_infisical_db_password: ""
+
+# Image versions
+caprover_prometheus_version: "v3.2.1"
+caprover_grafana_version: "11.5.2"
+caprover_uptimekuma_version: "1"
+caprover_codeserver_version: "4.96.4"
+caprover_infisical_version: "v0.105.1-postgres"
+caprover_infisical_postgres_version: "16-alpine"
+caprover_infisical_redis_version: "7-alpine"
+
+# Resource limits
+caprover_prometheus_memory_limit: "512M"
+caprover_prometheus_cpu_limit: "1.0"
+caprover_grafana_memory_limit: "512M"
+caprover_grafana_cpu_limit: "1.0"
+caprover_uptimekuma_memory_limit: "256M"
+caprover_uptimekuma_cpu_limit: "0.5"
+caprover_codeserver_memory_limit: "2G"
+caprover_codeserver_cpu_limit: "2.0"
+caprover_infisical_memory_limit: "1G"
+caprover_infisical_cpu_limit: "1.0"
+caprover_infisical_postgres_memory_limit: "512M"
+caprover_infisical_redis_memory_limit: "128M"

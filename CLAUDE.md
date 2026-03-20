@@ -2,6 +2,18 @@
 
 Be concise in initial responses. Start with the action plan (3-5 bullet points max), then execute. Do not give lengthy explanations before starting work.
 
+## Agents
+
+When using subagents/Task agents, always grant them Bash tool permissions. Example: ensure allowedTools includes Bash for any spawned agents.
+
+## MCP Configuration
+
+When configuring MCP servers, verify OAuth tokens and API keys are valid BEFORE attempting the connection. If credentials are expired, tell the user immediately rather than retrying.
+
+## Response Style
+
+Be concise in initial responses. Avoid lengthy preambles--get to the action or answer quickly. If clarification is needed, ask one focused question.
+
 ## Workflow
 
 When fixing lint or check errors, always read the full log file first before proposing fixes. Run `make check` (or equivalent) after each fix to verify resolution.
@@ -55,6 +67,7 @@ clincher/
     ├── agent-orchestrator/      # Step 5.2: multi-agent orchestration (optional)
     ├── openclaw-integrate/      # Steps 6-8: API, Telegram, memory
     ├── reverse-proxy/           # Step 9: Caddy/Tunnel/Tailscale
+    ├── convenience/             # Step 9.1: aliases, filebrowser (optional)
     ├── verify/                  # Step 10: post-deploy verification
     └── maintenance/             # Steps 11+13: backups, watchdog, cron
 ```
@@ -277,3 +290,4 @@ skill-name/
 - Latest instructions override earlier ones
 - Don't re-explain established context — build on it
 - Confirm briefly when context is ambiguous or stale
+
