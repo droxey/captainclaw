@@ -234,15 +234,15 @@
           instanceCount: 1
           captainDefinitionContent:
             schemaVersion: 2
-            imageName: "codercom/code-server:{{ caprover_codeserver_version }}"
+            imageName: "linuxserver/code-server:{{ caprover_codeserver_version }}"
           envVars:
             - key: PASSWORD
               value: "{{ caprover_codeserver_password }}"
           volumes:
             - hostPath: /captain/data/code-server
-              containerPath: /home/coder
+              containerPath: /config
           ports: []
-          containerHttpPort: 8080
+          containerHttpPort: 8443
           description: "VS Code (code-server) — browser-based IDE"
           resourceLimits:
             memoryLimitInMB: "{{ (caprover_codeserver_memory_limit | regex_replace('[^0-9]', '')) | int }}"

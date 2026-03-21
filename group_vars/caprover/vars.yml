@@ -13,12 +13,12 @@ caprover_wildcard_domain: "*.dev"
 caprover_root_domain: dev
 
 # --- CapRover ---
-caprover_version: "1.12.1"
+caprover_version: "latest"
 caprover_initial_password: captain42
 caprover_force_ssl: true
 
 # --- Docker ---
-caprover_docker_ce_version: "5:27.5.1~3-0~ubuntu-noble"
+caprover_docker_ce_version: "5:27.5.1-1~ubuntu.24.04~noble"
 
 # --- System tuning ---
 caprover_swappiness: 10
