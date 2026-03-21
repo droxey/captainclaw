@@ -265,8 +265,8 @@ openclaw_gateway_tool_denials:
 agency_agents_enabled: true
 agency_agents_repo: "https://github.com/msitarzewski/agency-agents.git"
 # Pin to commit SHA for reproducible deploys — git tags can be force-pushed.
-# SHA below is the HEAD of main as of 2026-03-08. To update:
-#   git ls-remote https://github.com/msitarzewski/agency-agents refs/heads/main
+# SHA below is the HEAD of main as of 2026-03-08.
+# To update all pins: scripts/update-pins.sh
 agency_agents_version: "6254154899f510eb4a4de10561fecfc1f32ff17f"
 # Which agent divisions to install (all 9 available):
 agency_agents_divisions:
@@ -292,49 +292,49 @@ vendor_skills_enabled: true
 vendor_skills:
   - name: anthropic
     repo: "https://github.com/anthropics/skills.git"
-    # SHA is HEAD of main as of 2026-03-06. To update:
+    # SHA is HEAD of main as of 2026-03-06. To update all pins: scripts/update-pins.sh
     #   git ls-remote https://github.com/anthropics/skills refs/heads/main
     version: "b0cbd3df1533b396d281a6886d5132f623393a9c"
     subdir: "skills"
   - name: vercel
     repo: "https://github.com/vercel-labs/agent-skills.git"
-    # SHA is HEAD of main as of 2026-03-06. To update:
+    # SHA is HEAD of main as of 2026-03-06. To update all pins: scripts/update-pins.sh
     #   git ls-remote https://github.com/vercel-labs/agent-skills refs/heads/main
     version: "9aec8ee6aaf702e49312a071e672f1c1b7b7e948"
     subdir: "skills"
   - name: stripe
     repo: "https://github.com/stripe/ai.git"
-    # SHA is HEAD of main as of 2026-03-05. To update:
+    # SHA is HEAD of main as of 2026-03-05. To update all pins: scripts/update-pins.sh
     #   git ls-remote https://github.com/stripe/ai refs/heads/main
     version: "91f8471adfe5189145aaab61879bfa13452c51eb"
     subdir: "skills"
   - name: cloudflare
     repo: "https://github.com/cloudflare/skills.git"
-    # SHA is HEAD of main as of 2026-03-03. To update:
+    # SHA is HEAD of main as of 2026-03-03. To update all pins: scripts/update-pins.sh
     #   git ls-remote https://github.com/cloudflare/skills refs/heads/main
     version: "d3113039790f64e052ff80f351190da65e9b7510"
     subdir: "skills"
   - name: hashicorp
     repo: "https://github.com/hashicorp/agent-skills.git"
-    # SHA is HEAD of main as of 2026-03-04. To update:
+    # SHA is HEAD of main as of 2026-03-04. To update all pins: scripts/update-pins.sh
     #   git ls-remote https://github.com/hashicorp/agent-skills refs/heads/main
     version: "9f2ede91f6eb72780c5fd787b3b1720623626dfb"
     subdir: "terraform"
   - name: google-workspace
     repo: "https://github.com/googleworkspace/cli.git"
-    # SHA is HEAD of main as of 2026-03-09. To update:
+    # SHA is HEAD of main as of 2026-03-09. To update all pins: scripts/update-pins.sh
     #   git ls-remote https://github.com/googleworkspace/cli refs/heads/main
     version: "e9970db26fb32ca97f11ce0d8c7c53e4eedd81cc"
     subdir: "skills"
   - name: openai
     repo: "https://github.com/openai/skills.git"
-    # SHA is HEAD of main as of 2026-03-21. To update:
+    # SHA is HEAD of main as of 2026-03-21. To update all pins: scripts/update-pins.sh
     #   git ls-remote https://github.com/openai/skills refs/heads/main
     version: "82d2c5b44ac234ec0f204f647562a4349d90ef43"
     subdir: "skills"
   - name: google-gemini
     repo: "https://github.com/google-gemini/gemini-skills.git"
-    # SHA is HEAD of main as of 2026-03-21. To update:
+    # SHA is HEAD of main as of 2026-03-21. To update all pins: scripts/update-pins.sh
     #   git ls-remote https://github.com/google-gemini/gemini-skills refs/heads/main
     version: "6c84b961890eb63fce2ed1162bfef8f66047f5f4"
     subdir: "skills"
@@ -346,8 +346,8 @@ vendor_skills:
 agent_orchestrator_enabled: true
 agent_orchestrator_repo: "https://github.com/ComposioHQ/agent-orchestrator.git"
 # Pin to commit SHA for reproducible deploys — git tags can be force-pushed.
-# SHA below is HEAD of main as of 2026-03-10. To update:
-#   git ls-remote https://github.com/ComposioHQ/agent-orchestrator refs/heads/main
+# SHA below is HEAD of main as of 2026-03-10.
+# To update all pins: scripts/update-pins.sh
 agent_orchestrator_version: "feb691e0b756c47e1bd7f14c9a0c8cb606d9a7f3"
 agent_orchestrator_pnpm_version: "10.6.5"
 agent_orchestrator_port: 3000
@@ -389,6 +389,10 @@ watchdog_interval: 5
 watchdog_restart_threshold: 3
 watchdog_disk_threshold: 85
 watchdog_memory_threshold: 90
+# Notification method for watchdog alerts: none, telegram, or ntfy.
+# telegram: reads bot token from monitoring/.tg-token, sends to telegram_chat_id.
+# ntfy: posts to ntfy_url (defaults to https://ntfy.sh/openclaw-alerts).
+watchdog_notify_method: "none"
 
 # ── Unattended Upgrades ─────────────────────────────────────────────
 auto_reboot: true

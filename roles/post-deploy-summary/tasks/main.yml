@@ -1,0 +1,114 @@
+---
+# Post-deploy summary: collect pending manual actions and display them.
+# Runs as the final role so operators see what to do next without
+# reading YAML comments. Modeled on bootstrap.sh's success output.
+
+# ── Collect state ───────────────────────────────────────────────────
+
+- name: Check Tailscale authentication status
+  ansible.builtin.command: tailscale status
+  register: _ts_status
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: tailscale_enabled | default(false) | bool
+
+- name: Check NTP synchronization
+  ansible.builtin.command: timedatectl show --property=NTPSynchronized --value
+  register: _ntp_status
+  changed_when: false
+  check_mode: false
+
+- name: Check agent orchestrator project list
+  ansible.builtin.command: ao list
+  register: _ao_projects
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: agent_orchestrator_enabled | default(false) | bool
+
+# ── Build next-steps list ───────────────────────────────────────────
+
+- name: Initialize next steps list
+  ansible.builtin.set_fact:
+    _next_steps: []
+
+- name: Add Tailscale auth step
+  ansible.builtin.set_fact:
+    _next_steps: "{{ _next_steps + [_step] }}"
+  vars:
+    _step: "Authenticate Tailscale — SSH in and run: sudo tailscale up"
+  when:
+    - tailscale_enabled | default(false) | bool
+    - _ts_status.rc | default(0) != 0
+
+- name: Add Cloudflare Tunnel route step
+  ansible.builtin.set_fact:
+    _next_steps: "{{ _next_steps + [_step] }}"
+  vars:
+    _step: "Configure Cloudflare Tunnel route: {{ domain }} -> http://openclaw:18789"
+  when:
+    - reverse_proxy | default('') == 'tunnel'
+
+- name: Add watchdog notification step
+  ansible.builtin.set_fact:
+    _next_steps: "{{ _next_steps + [_step] }}"
+  vars:
+    _step: "Configure watchdog alerts: set watchdog_notify_method in vars.yml (telegram or ntfy)"
+  when: watchdog_notify_method | default('none') == 'none'
+
+- name: Add NTP warning step
+  ansible.builtin.set_fact:
+    _next_steps: "{{ _next_steps + [_step] }}"
+  vars:
+    _step: "Fix NTP sync — timedatectl status shows not synchronized (clock drift breaks TLS)"
+  when: _ntp_status.stdout | default('yes') != 'yes'
+
+- name: Add agent orchestrator init step
+  ansible.builtin.set_fact:
+    _next_steps: "{{ _next_steps + [_step] }}"
+  vars:
+    _step: "Initialize agent orchestrator projects: ao init --auto"
+  when:
+    - agent_orchestrator_enabled | default(false) | bool
+    - _ao_projects.stdout | default('') | length == 0 or _ao_projects.rc | default(0) != 0
+
+- name: Add smoke test step
+  ansible.builtin.set_fact:
+    _next_steps: "{{ _next_steps + [_step] }}"
+  vars:
+    _step: "Run smoke test to verify all LLM models: make smoke-test (~$0.02)"
+
+- name: Add DNS verification step
+  ansible.builtin.set_fact:
+    _next_steps: "{{ _next_steps + [_step] }}"
+  vars:
+    _step: "Verify DNS and TLS: curl -I https://{{ domain }}"
+
+# ── Display summary ─────────────────────────────────────────────────
+
+- name: Display deployment summary
+  ansible.builtin.debug:
+    msg: |
+
+      ════════════════════════════════════════════════════
+        OpenClaw deployment complete
+      ════════════════════════════════════════════════════
+
+        Dashboard:    https://{{ domain }}
+
+      {% if _next_steps | length > 0 %}
+        Next steps:
+      {% for step in _next_steps %}
+          {{ loop.index }}. {{ step }}
+      {% endfor %}
+      {% else %}
+        No manual steps required — fully configured.
+      {% endif %}
+
+        Useful commands:
+          make verify        re-run health checks
+          make smoke-test    test all LLM models
+          make deploy        full redeploy
+
+      ════════════════════════════════════════════════════

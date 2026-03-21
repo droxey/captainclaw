@@ -550,13 +550,48 @@ default:
     - "*.openai.com"
     # Memory embeddings (required for Voyage AI memory — Step 8)
     - "*.voyageai.com"
-    # Uncomment providers as you add their API keys in Step 6:
+    # Uncomment domains as you enable their corresponding services:
+    # ── LLM Providers ──────────────────────────────────────────────
     # - "*.x.ai"               # xAI Grok
     # - "*.groq.com"            # Groq
     # - "*.googleapis.com"      # Google Gemini
     # - "*.deepseek.com"        # DeepSeek
     # - "*.openrouter.ai"       # OpenRouter
     # - "*.baidubce.com"        # Baidu Qianfan
+    # - "*.mistral.ai"          # Mistral AI
+    # - "*.together.xyz"        # Together AI
+    # - "*.fireworks.ai"        # Fireworks AI
+    # - "*.perplexity.ai"       # Perplexity (search-augmented)
+    # - "*.cohere.ai"           # Cohere v1
+    # - "*.cohere.com"          # Cohere v2
+    # - "*.replicate.com"       # Replicate
+    # - "*.cerebras.ai"         # Cerebras
+    # - "*.sambanova.ai"        # SambaNova
+    # - "integrate.api.nvidia.com"  # NVIDIA NIM
+    # - "api.ai21.com"          # AI21 Labs
+    # - "*.openai.azure.com"    # Azure OpenAI
+    # ── Embeddings & Reranking ─────────────────────────────────────
+    # - "api.jina.ai"           # Jina AI embeddings + reranker
+    # - "router.huggingface.co" # Hugging Face Inference API
+    # ── Search & Web Retrieval ─────────────────────────────────────
+    # - "api.tavily.com"        # Tavily AI search
+    # - "api.search.brave.com"  # Brave Search API
+    # - "api.exa.ai"            # Exa neural search
+    # - "serpapi.com"            # SerpAPI
+    # - "api.wolframalpha.com"  # Wolfram Alpha
+    # ── Web Scraping & Code Execution ──────────────────────────────
+    # - "api.firecrawl.dev"     # Firecrawl web scraping
+    # - "*.e2b.dev"             # E2B code sandbox
+    # ── Channel Integrations ──────────────────────────────────────
+    # - "*.telegram.org"        # Telegram Bot API
+    # - "discord.com"           # Discord Bot API
+    # - "*.discordapp.com"      # Discord CDN and media
+    # - "gateway.discord.gg"    # Discord WebSocket gateway
+    # - "api.slack.com"         # Slack Bot API
+    # - "graph.facebook.com"    # WhatsApp Cloud API (Meta)
+    # ── OpenAI Asset Domains ──────────────────────────────────────
+    # - "oaidalleapiprodscus.blob.core.windows.net"  # DALL-E images
+    # - "*.oaiusercontent.com"  # OpenAI file outputs
 EOF
 ```
 
@@ -1272,7 +1307,19 @@ OpenClaw routes to LLM providers via the Smokescreen egress proxy (Step 3). You 
 | **[DeepSeek](https://platform.deepseek.com/api_keys)** | [Platform → API Keys](https://platform.deepseek.com/api_keys) | `DEEPSEEK_API_KEY` | `.deepseek.com` | 5M tokens (30 days) |
 | **[OpenRouter](https://openrouter.ai/settings/keys)** | [Settings → Keys](https://openrouter.ai/settings/keys) | `OPENROUTER_API_KEY` | `.openrouter.ai` | Some free models |
 | **[Baidu Qianfan](https://console.bce.baidu.com/qianfan/ais/console/applicationConsole/application)** | [IAM → Access Keys](https://console.bce.baidu.com/iam/#/iam/accesslist) | `QIANFAN_AK` + `QIANFAN_SK` | `.baidubce.com` | Limited free quota |
+| **[Mistral AI](https://console.mistral.ai/api-keys)** | [Console → API Keys](https://console.mistral.ai/api-keys) | `MISTRAL_API_KEY` | `.mistral.ai` | Limited free tier |
+| **[Together AI](https://api.together.xyz/settings/api-keys)** | [Settings → API Keys](https://api.together.xyz/settings/api-keys) | `TOGETHER_API_KEY` | `.together.xyz` | $5 credits |
+| **[Fireworks AI](https://fireworks.ai/account/api-keys)** | [Account → API Keys](https://fireworks.ai/account/api-keys) | `FIREWORKS_API_KEY` | `.fireworks.ai` | $1 credits |
+| **[Perplexity](https://www.perplexity.ai/settings/api)** | [Settings → API](https://www.perplexity.ai/settings/api) | `PERPLEXITY_API_KEY` | `.perplexity.ai` | No |
+| **[Cohere](https://dashboard.cohere.com/api-keys)** | [Dashboard → API Keys](https://dashboard.cohere.com/api-keys) | `COHERE_API_KEY` | `.cohere.ai` + `.cohere.com` | Yes — rate-limited |
+| **[Replicate](https://replicate.com/account/api-tokens)** | [Account → API Tokens](https://replicate.com/account/api-tokens) | `REPLICATE_API_KEY` | `.replicate.com` | No |
+| **[Cerebras](https://cloud.cerebras.ai/)** | [Cloud Console](https://cloud.cerebras.ai/) | `CEREBRAS_API_KEY` | `.cerebras.ai` | Yes — rate-limited |
+| **[SambaNova](https://cloud.sambanova.ai/apis)** | [Cloud → APIs](https://cloud.sambanova.ai/apis) | `SAMBANOVA_API_KEY` | `.sambanova.ai` | Yes — rate-limited |
+| **[NVIDIA NIM](https://build.nvidia.com/)** | [Build → API](https://build.nvidia.com/) | `NVIDIA_API_KEY` | `integrate.api.nvidia.com` | 1,000 credits |
+| **[AI21 Labs](https://studio.ai21.com/account/api-key)** | [Studio → API Key](https://studio.ai21.com/account/api-key) | `AI21_API_KEY` | `api.ai21.com` | Limited free tier |
+| **[Azure OpenAI](https://portal.azure.com/)** | [Azure Portal](https://portal.azure.com/) | `AZURE_API_KEY` + `AZURE_API_BASE` | `.openai.azure.com` | No |
 | **[Voyage AI](https://dash.voyageai.com)** | [Dashboard](https://dash.voyageai.com) | `VOYAGE_API_KEY` | `.voyageai.com` | 200M tokens free |
+| **[Jina AI](https://jina.ai/embeddings/)** | [Dashboard](https://jina.ai/embeddings/) | `JINA_API_KEY` | `api.jina.ai` | 1M tokens free |
 | **[vLLM](https://docs.vllm.ai/en/latest/getting_started/quickstart/)** (self-hosted) | N/A — [Quickstart](https://docs.vllm.ai/en/latest/getting_started/quickstart/) | `VLLM_API_KEY` (self-hosted only) | Your server IP | N/A — open source |
 
 > **Choosing a provider**: Anthropic Claude Opus 4.6 is the recommended default for tool-enabled agents — it has the strongest instruction-following and injection resistance. Use Groq or DeepSeek for cost-sensitive workloads where tool execution is disabled. vLLM eliminates external API calls entirely but requires GPU compute.

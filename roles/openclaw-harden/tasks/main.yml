@@ -243,9 +243,9 @@
   changed_when: false
   check_mode: false
 
-# sandbox lifecycle keys (idleHours, maxAgeDays) removed — not supported in this OpenClaw version
+# sandbox lifecycle keys (idleHours, maxAgeDays) removed — not supported as of OpenClaw 2026.3.13
 
-# token cost optimization keys (maxTokens, model.heartbeat) removed — not supported in this OpenClaw version
+# token cost optimization keys (maxTokens, model.heartbeat) removed — not supported as of OpenClaw 2026.3.13
 
 - name: Apply tool denials (gateway level)
   ansible.builtin.command: >
@@ -259,7 +259,7 @@
   delay: 5
 
 # agent-level tool denials, groupChat, and channel wildcard policies
-# removed — not supported in this OpenClaw version
+# removed — not supported as of OpenClaw 2026.3.13
 
 # ── SOUL.md ───────────────────────────────────────────────────────────
 # block/always guarantees staging file removal even if docker cp fails.

@@ -315,13 +315,33 @@
   changed_when: false
   check_mode: false
 
-- name: Warn if NTP is not synchronized
+- name: Enable NTP synchronization if not active
+  ansible.builtin.command: timedatectl set-ntp true
+  when: ntp_sync.stdout != 'yes'
+  changed_when: true
+
+- name: Restart timesyncd after enabling NTP
+  ansible.builtin.systemd:
+    name: systemd-timesyncd
+    state: restarted
+  when: ntp_sync.stdout != 'yes'
+
+- name: Re-verify NTP synchronization after fix
+  ansible.builtin.command: timedatectl show --property=NTPSynchronized --value
+  register: ntp_recheck
+  changed_when: false
+  check_mode: false
+  when: ntp_sync.stdout != 'yes'
+
+- name: Warn if NTP still not synchronized after fix attempt
   ansible.builtin.debug:
     msg: >
-      WARNING: NTP is not synchronized (NTPSynchronized={{ ntp_sync.stdout }}).
+      WARNING: NTP is still not synchronized after enabling.
       TLS certificate validation and log timestamps may be unreliable.
-      Check: timedatectl status / systemctl status systemd-timesyncd
-  when: ntp_sync.stdout != 'yes'
+      Investigate: timedatectl status / systemctl status systemd-timesyncd
+  when:
+    - ntp_sync.stdout != 'yes'
+    - ntp_recheck.stdout | default('yes') != 'yes'
 
 # ── Disable IPv6 (Optional) ──────────────────────────────────────────
 - name: Disable IPv6 in UFW

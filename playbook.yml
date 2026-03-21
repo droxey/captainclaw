@@ -383,5 +383,7 @@
       tags: [verify]
     - role: maintenance
       tags: [maintenance]
+    - role: post-deploy-summary
+      tags: [summary, verify]
     - role: smoke-test
       tags: [smoke-test, never]

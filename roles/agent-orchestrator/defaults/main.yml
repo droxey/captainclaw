@@ -5,8 +5,8 @@
 agent_orchestrator_enabled: true
 agent_orchestrator_repo: "https://github.com/ComposioHQ/agent-orchestrator.git"
 # Pin to commit SHA for reproducible deploys — git tags can be force-pushed.
-# SHA below is HEAD of main as of 2026-03-10. To update:
-#   git ls-remote https://github.com/ComposioHQ/agent-orchestrator refs/heads/main
+# SHA below is HEAD of main as of 2026-03-10.
+# To update all pins: scripts/update-pins.sh
 agent_orchestrator_version: "240d6423fb0e3efb4d423b0f118871c438eedf6c"
 
 agent_orchestrator_install_dir: "/opt/agent-orchestrator"

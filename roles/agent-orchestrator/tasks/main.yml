@@ -261,3 +261,11 @@
   ansible.builtin.debug:
     msg: "WARNING: Agent orchestrator dashboard not responding on port {{ agent_orchestrator_port }}. The ao CLI still works. Check: sudo systemctl status agent-orchestrator"
   when: dashboard_check is failed
+
+- name: Initialize agent orchestrator (idempotent)
+  ansible.builtin.command: ao init --auto
+  args:
+    creates: "{{ agent_orchestrator_install_dir | default('/opt/agent-orchestrator') }}/.initialized"
+  environment:
+    HOME: /root
+  when: dashboard_check is succeeded
