@@ -14,7 +14,7 @@ model_list:
 {% endfor %}
 
   # Embedding model (for semantic cache)
-  - model_name: "voyage-cache-embed"
+  - model_name: "voyage/voyage-3-lite"
     litellm_params:
       model: "voyage/voyage-3-lite"
       api_key: "os.environ/VOYAGE_API_KEY"

@@ -113,18 +113,18 @@ egress_extra_domains:
 # ── LiteLLM ──────────────────────────────────────────────────────────
 litellm_models:
   # ── Anthropic (Claude) ──────────────────────────────────────────────
-  - name: "anthropic/claude-opus-4-5"
-    model: "claude-opus-4-5"
+  - name: "anthropic/claude-opus-4-20250514"
+    model: "anthropic/claude-opus-4-20250514"
     key_env: "ANTHROPIC_API_KEY"
     max_budget: 100.0
     rpm: 60
-  - name: "anthropic/claude-sonnet-4-5"
-    model: "claude-sonnet-4-5"
+  - name: "anthropic/claude-sonnet-4-20250514"
+    model: "anthropic/claude-sonnet-4-20250514"
     key_env: "ANTHROPIC_API_KEY"
     max_budget: 50.0
     rpm: 120
-  - name: "anthropic/claude-haiku-4-5"
-    model: "claude-haiku-4-5"
+  - name: "anthropic/claude-haiku-4-5-20251001"
+    model: "claude-haiku-4-5-20251001"
     key_env: "ANTHROPIC_API_KEY"
     max_budget: 20.0
     rpm: 300
@@ -203,8 +203,8 @@ redis_maxmemory: "256mb"
 # redis_password lives in vault.yml — do NOT set here (vars.yml overrides vault).
 
 # ── OpenClaw Hardening ────────────────────────────────────────────────
-openclaw_default_model: "anthropic/claude-opus-4-5"
-openclaw_heartbeat_model: "anthropic/claude-haiku-4-5"
+openclaw_default_model: "anthropic/claude-opus-4-20250514"
+openclaw_heartbeat_model: "anthropic/claude-haiku-4-5-20251001"
 openclaw_max_tokens: 4096
 # Optional extra env vars passed into the OpenClaw container via /opt/openclaw/.env.
 # Use this for integrations that need runtime credentials or endpoints (for example,
@@ -392,7 +392,7 @@ watchdog_memory_threshold: 90
 # Notification method for watchdog alerts: none, telegram, or ntfy.
 # telegram: reads bot token from monitoring/.tg-token, sends to telegram_chat_id.
 # ntfy: posts to ntfy_url (defaults to https://ntfy.sh/openclaw-alerts).
-watchdog_notify_method: "none"
+watchdog_notify_method: "telegram"
 
 # ── Unattended Upgrades ─────────────────────────────────────────────
 auto_reboot: true

@@ -617,9 +617,9 @@ model_list:
     model_info:
       max_budget: 50.0
     rpm: 120
-  - model_name: "anthropic/claude-haiku-4-5"
+  - model_name: "anthropic/claude-haiku-4-5-20251001"
     litellm_params:
-      model: "claude-haiku-4-5"
+      model: "claude-haiku-4-5-20251001"
       api_key: "os.environ/ANTHROPIC_API_KEY"
     model_info:
       max_budget: 20.0
@@ -1125,7 +1125,7 @@ openclaw config set agents.defaults.maxTokens 4096
 # Route heartbeats through LiteLLM's cheapest model instead of Opus.
 # Heartbeats fire every 30 min — at Opus pricing, that's $2-5/day idle cost.
 # Haiku handles heartbeat health checks at 1/60th the cost.
-openclaw config set agents.defaults.model.heartbeat "anthropic/claude-haiku-4-5"
+openclaw config set agents.defaults.model.heartbeat "anthropic/claude-haiku-4-5-20251001"
 
 # ── Tool Denials ─────────────────────────────────────────────────────
 openclaw config set agents.defaults.tools.deny '["process", "browser", "nodes", "gateway", "sessions_spawn", "sessions_send", "elevated", "host_exec", "docker", "camera", "canvas", "cron"]'
@@ -1920,7 +1920,7 @@ docker exec openclaw openclaw config get session.dmScope
 
 # ── Token Cost Optimization Spot-Check ────────────────────────────────
 docker exec openclaw openclaw config get agents.defaults.model.heartbeat
-# Expected: "anthropic/claude-haiku-4-5"
+# Expected: "anthropic/claude-haiku-4-5-20251001"
 docker exec openclaw openclaw config get agents.defaults.maxTokens
 # Expected: 4096
 docker exec openclaw openclaw config get agents.defaults.sandbox.docker.idleHours

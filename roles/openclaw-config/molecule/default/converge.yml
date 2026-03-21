@@ -28,8 +28,8 @@
     # LiteLLM
     litellm_master_key: "test-litellm-master-key-0000000000000000"
     litellm_models:
-      - name: "anthropic/claude-opus-4-5"
-        model: "claude-opus-4-5"
+      - name: "anthropic/claude-opus-4-6"
+        model: "claude-opus-4-6"
         key_env: "ANTHROPIC_API_KEY"
         max_budget: 100.0
         rpm: 60
