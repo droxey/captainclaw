@@ -144,6 +144,15 @@
   changed_when: false
   check_mode: false
 
+- name: Wait for openclaw container to be running after mode change
+  ansible.builtin.command: docker inspect openclaw --format={{ '{{' }}.State.Status{{ '}}' }}
+  register: _oc_mode_state
+  until: _oc_mode_state.stdout == "running"
+  retries: 12
+  delay: 5
+  changed_when: false
+  check_mode: false
+
 - name: Apply gateway network config
   ansible.builtin.command: "docker exec openclaw openclaw config set {{ item.key }} {{ item.value }}"
   loop:

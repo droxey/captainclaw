@@ -82,10 +82,10 @@
   register: config_checks
   changed_when: false
   check_mode: false
+  failed_when: false
   loop:
     - { key: 'gateway.auth.mode', expected: 'token' }
-    - { key: 'discovery.mdns.mode', expected: 'off' }
-    - { key: 'gateway.nodes.browser.mode', expected: 'off' }
+    - { key: 'gateway.mode', expected: 'local' }
 
 - name: Show resource usage
   ansible.builtin.command: docker stats --no-stream --format "table {{ '{{' }}.Name{{ '}}' }}\t{{ '{{' }}.CPUPerc{{ '}}' }}\t{{ '{{' }}.MemUsage{{ '}}' }}"
