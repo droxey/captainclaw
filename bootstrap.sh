@@ -624,7 +624,8 @@ clone_repo() {
     info "Updating existing repository..."
     cd "$INSTALL_DIR"
     git pull --ff-only origin main 2>/dev/null || {
-      local stash_name="clincher-bootstrap-$(date +%Y%m%d%H%M%S)"
+      local stash_name
+      stash_name="clincher-bootstrap-$(date +%Y%m%d%H%M%S)"
       warn "Fast-forward pull failed — stashing local changes as '$stash_name'..."
       git stash push -m "$stash_name"
       git pull --ff-only origin main
@@ -674,9 +675,9 @@ generate_config() {
       fi
       info "Existing vault.yml detected but no vault password file found."
       while true; do
-        read -s -p "Enter existing Ansible vault password for this host: " vault_pass_1
+        read -rs -p "Enter existing Ansible vault password for this host: " vault_pass_1
         echo
-        read -s -p "Confirm vault password: " vault_pass_2
+        read -rs -p "Confirm vault password: " vault_pass_2
         echo
         if [[ -n "$vault_pass_1" && "$vault_pass_1" == "$vault_pass_2" ]]; then
           printf '%s\n' "$vault_pass_1" > "$VAULT_PASS_FILE"
