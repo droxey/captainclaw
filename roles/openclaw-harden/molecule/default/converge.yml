@@ -1,6 +1,6 @@
 ---
 # Converge playbook for openclaw-harden role
-# Renders SOUL.md template to a temporary directory without requiring Docker.
+# Renders SOUL.md template and tool denial list without requiring Docker.
 - name: Test openclaw-harden role template rendering
   hosts: localhost
   connection: local
@@ -11,6 +11,15 @@
     openclaw_base_dir: /tmp/molecule-openclaw-harden
 
   tasks:
+    - name: Load tool denial list from group_vars
+      ansible.builtin.include_vars:
+        file: ../../../../group_vars/all/vars.yml
+        name: project_vars
+
+    - name: Set tool denial list from project vars
+      ansible.builtin.set_fact:
+        openclaw_gateway_tool_denials: "{{ project_vars.openclaw_gateway_tool_denials }}"
+
     - name: Create OpenClaw directory tree
       ansible.builtin.file:
         path: "{{ openclaw_base_dir }}"
@@ -21,4 +30,10 @@
       ansible.builtin.template:
         src: "{{ playbook_dir }}/../../templates/SOUL.md.j2"
         dest: "{{ openclaw_base_dir }}/SOUL.md"
+        mode: "0644"
+
+    - name: Render tool denial list for verification
+      ansible.builtin.copy:
+        content: "{{ openclaw_gateway_tool_denials | to_json }}"
+        dest: "{{ openclaw_base_dir }}/tool-denials.json"
         mode: "0644"

@@ -18,3 +18,5 @@ venv/
 group_vars/all/zzz_bootstrap.yml
 .lock
 cloudserver.yml
+.charm/
+.context/

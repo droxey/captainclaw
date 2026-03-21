@@ -1846,11 +1846,13 @@ services:
     environment:
       TUNNEL_TOKEN: "${TUNNEL_TOKEN}"
     networks:
-      - ingress-net
       - proxy-net
+      - egress-net
     read_only: true
     cap_drop:
       - ALL
+    cap_add:
+      - NET_BIND_SERVICE
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
@@ -1859,9 +1861,9 @@ networks:
   proxy-net:
     external: true
     name: openclaw_proxy-net
-  ingress-net:
+  egress-net:
     external: true
-    name: openclaw_ingress-net
+    name: openclaw_egress-net
 EOF
 
 # Store tunnel token in .env (not in the compose file)
@@ -1873,7 +1875,9 @@ docker compose -f docker-compose.yml -f compose.tunnel.yml up -d
 
 Configure the tunnel in Cloudflare dashboard to route `openclaw.yourdomain.com` to `http://openclaw:18789`.
 
-> **Security note**: The tunnel token is loaded from `.env` via variable substitution — not hardcoded in the compose file. Pin the `cloudflared` image version; `latest` tags can introduce breaking changes.
+> **DNS Configuration**: Create a **CNAME** record pointing your domain to `<TUNNEL_ID>.cfargotunnel.com` with Cloudflare proxy enabled (orange cloud). Do **not** use an A record — Cloudflare only routes tunnel traffic via CNAME. Find your tunnel ID in **Zero Trust > Networks > Tunnels**.
+
+> **Security note**: The tunnel token is loaded from `.env` via variable substitution — not hardcoded in the compose file. Pin the `cloudflared` image version; `latest` tags can introduce breaking changes. The `egress-net` network provides internet access for DNS resolution and the outbound tunnel connection, while `proxy-net` connects cloudflared to the OpenClaw gateway.
 
 #### Option C: Tailscale Serve (Zero-Config, Private Access Only)
 

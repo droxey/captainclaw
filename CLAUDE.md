@@ -184,7 +184,13 @@ Preserve this 14-step order — never reorder or merge steps:
 
 - **Branches**: `main` (remote) / `master` (legacy local) — trunk. Feature branches via PRs.
 - **Change types**: security fixes, integration fixes, README restructuring, prompt additions, CLAUDE.md updates
-- **Commit style**: `Fix 7 integration issues: network config, egress ACLs, directory ordering`
+- **Commit format**: conventional prefix, imperative mood, ≤72 char subject
+  - Blank line between subject and body; body explains *why* not *what*
+  - Prefixes: `feat`, `fix`, `security`, `refactor`, `docs`, `ci`, `chore`, `test`
+  - Examples:
+    - `fix: resolve Redis password leak in docker-compose template`
+    - `security: restrict egress whitelist to LLM provider domains only`
+    - `ci: add shellcheck to lint pipeline`
 
 **Editing conventions:**
 - Preserve 14-step structure

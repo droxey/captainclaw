@@ -10,6 +10,7 @@
     openclaw_base_dir: /tmp/molecule-openclaw-harden
 
   tasks:
+    # ── SOUL.md Verification ──────────────────────────────────────────
     - name: Check SOUL.md exists
       ansible.builtin.stat:
         path: "{{ openclaw_base_dir }}/SOUL.md"
@@ -32,4 +33,48 @@
           - "'API keys' in (soul_content.content | b64decode)"
           - "'least privilege' in (soul_content.content | b64decode)"
           - "'hardened OpenClaw' in (soul_content.content | b64decode)"
+          - "'Security Rules' in (soul_content.content | b64decode)"
+          - "'SOUL.md' in (soul_content.content | b64decode)"
         fail_msg: "SOUL.md is missing expected security phrases"
+
+    # ── Tool Denial List Verification ─────────────────────────────────
+    - name: Check tool-denials.json exists
+      ansible.builtin.stat:
+        path: "{{ openclaw_base_dir }}/tool-denials.json"
+      register: denials_check
+
+    - name: Assert tool-denials.json exists
+      ansible.builtin.assert:
+        that: denials_check.stat.exists
+        fail_msg: "File {{ openclaw_base_dir }}/tool-denials.json was not created"
+
+    - name: Read tool-denials.json
+      ansible.builtin.slurp:
+        src: "{{ openclaw_base_dir }}/tool-denials.json"
+      register: denials_raw
+
+    - name: Parse tool denial list
+      ansible.builtin.set_fact:
+        tool_denials: "{{ denials_raw.content | b64decode | from_json }}"
+
+    - name: Verify tool denial list structure
+      ansible.builtin.assert:
+        that:
+          - "tool_denials | type_debug == 'list'"
+          - "tool_denials | length >= 9"
+          - "'' not in tool_denials"
+        fail_msg: "Tool denial list must be a non-empty list with >= 9 entries and no blank strings"
+
+    - name: Verify all critical tools are denied
+      ansible.builtin.assert:
+        that:
+          - "'sessions_spawn' in tool_denials"
+          - "'sessions_send' in tool_denials"
+          - "'gateway' in tool_denials"
+          - "'elevated' in tool_denials"
+          - "'host_exec' in tool_denials"
+          - "'docker' in tool_denials"
+          - "'camera' in tool_denials"
+          - "'canvas' in tool_denials"
+          - "'cron' in tool_denials"
+        fail_msg: "Tool denial list is missing one or more critical tool names"

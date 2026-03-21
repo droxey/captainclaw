@@ -1,7 +1,7 @@
-.PHONY: lint test role-tests deploy verify check caprover-check caprover-deploy caprover-verify scan bootstrap help
+.PHONY: lint test role-tests deploy verify check caprover-check caprover-deploy caprover-verify scan bootstrap setup help
 
-lint:                          ## Run all linters (yamllint + ansible-lint + syntax check)
-	yamllint . && ansible-lint && ansible-playbook playbook.yml --syntax-check && ansible-playbook caprover-playbook.yml --syntax-check
+lint:                          ## Run all linters (yamllint + ansible-lint + shellcheck + syntax check)
+	yamllint . && ansible-lint && ansible-playbook playbook.yml --syntax-check && ansible-playbook caprover-playbook.yml --syntax-check && bash -n bootstrap.sh && shellcheck bootstrap.sh
 
 test:                          ## Run all Molecule tests (project, CapRover, and role-level)
 	molecule test -s default && molecule test -s caprover && $(MAKE) role-tests
@@ -40,6 +40,9 @@ check: lint test scan          ## Run lint + test + scan (full CI equivalent)
 
 bootstrap:                     ## Run bootstrap script (pass ARGS="--config deploy.yml" for flags)
 	bash bootstrap.sh $(ARGS)
+
+setup:                         ## Install pre-commit hooks (run once after clone)
+	pip install pre-commit && pre-commit install
 
 help:                          ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \

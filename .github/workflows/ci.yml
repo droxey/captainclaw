@@ -54,6 +54,12 @@ jobs:
       - name: Run ansible-lint
         run: ansible-lint
 
+      - name: Run shellcheck on bootstrap.sh
+        run: shellcheck bootstrap.sh
+
+      - name: Run bash syntax check on bootstrap.sh
+        run: bash -n bootstrap.sh
+
   syntax:
     name: Syntax Check
     runs-on: ubuntu-24.04
