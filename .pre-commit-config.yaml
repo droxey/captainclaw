@@ -1,17 +1,17 @@
 ---
 repos:
   - repo: https://github.com/adrienverge/yamllint
-    rev: v1.35.1
+    rev: v1.38.0
     hooks:
       - id: yamllint
 
   - repo: https://github.com/ansible/ansible-lint
-    rev: v25.3.0
+    rev: v26.3.0
     hooks:
       - id: ansible-lint
 
   - repo: https://github.com/shellcheck-py/shellcheck-py
-    rev: v0.10.0.1
+    rev: v0.11.0.1
     hooks:
       - id: shellcheck
-        files: bootstrap\.sh$
+        files: (bootstrap|update-pins)\.sh$

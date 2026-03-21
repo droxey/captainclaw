@@ -297,3 +297,20 @@ skill-name/
 - Don't re-explain established context — build on it
 - Confirm briefly when context is ambiguous or stale
 
+## Development Workflow
+This project uses Ansible with YAML playbooks, Molecule for testing, and vault-encrypted secrets. Always run `make check` after modifying any YAML, playbook, or role files to catch lint and molecule errors before committing.
+
+## Agent Guidelines
+When using subagents/Task Agents, always grant them Bash tool permissions. Subagents without Bash access will fail on this project since most checks require shell commands.
+
+## Safety / Do Not Touch
+Never modify ansible.cfg vault-related settings or remove/change vault password file references without explicit user approval. Vault decryption breakage is a critical failure.
+
+## Environment Constraints
+This environment runs in a sandbox. Do not attempt sudo commands or write to ~/.config -- write config files to the project directory instead. If a command needs sudo, output it for the user to run manually.
+
+## Environment Constraints
+Python tools (ansible, molecule, etc.) are in a virtualenv. Always activate the venv before running ansible or molecule commands.
+
+## Interaction Style section
+When the user says 'go' or gives a single-word directive, check CLAUDE.md and recent git status/diff for context before asking for clarification. Prefer action over questions.

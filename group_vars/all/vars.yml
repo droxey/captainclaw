@@ -97,7 +97,7 @@ redis_maxmemory: "256mb"
 # Redis runs without authentication (current behavior, safe because
 # openclaw-net is internal). Set a value in vault.yml to enable AUTH.
 # Generate with: openssl rand -hex 32
-redis_password: "6385bd3117aa1cb7b63925c9caf143e6fd4a7293e989a9069e23ea8a1579c8e4"
+# redis_password lives in vault.yml — do NOT set here (vars.yml overrides vault).
 
 # ── OpenClaw Hardening ────────────────────────────────────────────────
 openclaw_default_model: "anthropic/claude-opus-4-6"

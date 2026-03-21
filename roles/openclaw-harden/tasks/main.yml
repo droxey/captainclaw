@@ -272,11 +272,19 @@
 # ── File Permissions ──────────────────────────────────────────────────
 # cap_drop=ALL prevents chown, but chmod on owned files works without
 # capabilities. Restrict log file to owner-only to prevent message leaks.
+- name: Check if openclaw log file exists
+  ansible.builtin.command: >
+    docker exec openclaw test -f /home/node/.openclaw/logs/openclaw.log
+  register: openclaw_log_exists
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
 - name: Restrict log file permissions
   ansible.builtin.command: >
     docker exec openclaw chmod 600 /home/node/.openclaw/logs/openclaw.log
+  when: openclaw_log_exists.rc == 0
   changed_when: false
-  failed_when: false
   check_mode: false
 
 # ── Verify and Fix ────────────────────────────────────────────────────

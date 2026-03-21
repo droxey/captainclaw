@@ -87,7 +87,7 @@ fetch_sha() {
   if [[ -n "${TMPDIR_PARALLEL:-}" ]]; then
     printf '%s' "$sha" > "${TMPDIR_PARALLEL}/${idx}"
   else
-    NEW_SHAS[$idx]="$sha"
+    NEW_SHAS[idx]="$sha"
   fi
 }
 
@@ -105,16 +105,16 @@ if "$PARALLEL" && [[ "$count" -gt 1 ]]; then
     if ! wait "${pids[$i]}"; then
       printf 'error: git ls-remote failed for %s %s\n' "${URLS[$i]}" "${REFS[$i]}" >&2
       FAILURES=$((FAILURES + 1))
-      NEW_SHAS[$i]=""
+      NEW_SHAS[i]=""
       continue
     fi
     sha_file="${TMPDIR_PARALLEL}/${i}"
     if [[ -f "$sha_file" ]]; then
-      NEW_SHAS[$i]=$(cat "$sha_file")
+      NEW_SHAS[i]=$(cat "$sha_file")
     else
       printf 'error: no SHA returned for %s %s\n' "${URLS[$i]}" "${REFS[$i]}" >&2
       FAILURES=$((FAILURES + 1))
-      NEW_SHAS[$i]=""
+      NEW_SHAS[i]=""
     fi
   done
 else
@@ -122,7 +122,7 @@ else
     if ! fetch_sha "$i" "${URLS[$i]}" "${REFS[$i]}"; then
       printf 'error: git ls-remote failed for %s %s\n' "${URLS[$i]}" "${REFS[$i]}" >&2
       FAILURES=$((FAILURES + 1))
-      NEW_SHAS[$i]=""
+      NEW_SHAS[i]=""
     fi
   done
 fi
